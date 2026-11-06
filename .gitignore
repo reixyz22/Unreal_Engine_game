@@ -8,3 +8,6 @@ DerivedDataCache/
 *.VC.db
 *.suo
 .commitmsg
+*.slnx
+Project_Riot/Windows/
+Project_Riot/Build/Windows/FileOpenOrder/
