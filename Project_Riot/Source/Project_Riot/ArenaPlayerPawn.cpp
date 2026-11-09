@@ -1,18 +1,31 @@
 #include "ArenaPlayerPawn.h"
 
+#include "ArenaArt.h"
+#include "ArenaChainBall.h"
+#include "ArenaEnemy.h"
+#include "ArenaGameMode.h"
 #include "Camera/CameraComponent.h"
 #include "Components/SphereComponent.h"
+#include "Engine/Engine.h"
+#include "Engine/LocalPlayer.h"
+#include "EngineUtils.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
-#include "Engine/LocalPlayer.h"
 #include "GameFramework/PlayerController.h"
+#include "HealthComponent.h"
 #include "InputActionValue.h"
+#include "PaperFlipbook.h"
+#include "PaperFlipbookComponent.h"
 #include "PaperSpriteComponent.h"
 
 namespace
 {
 	constexpr float PlayerDepth = 10.f;
+	constexpr float ChainDepth = 16.f;
 	constexpr float CameraDistance = 1000.f;
+	constexpr float BlinkPeriod = 0.1f;
+	constexpr int32 StatusMessageKey = 2;
+	const FVector HandOffset(5.f, 1.f, -3.f);
 }
 
 AArenaPlayerPawn::AArenaPlayerPawn()
@@ -24,16 +37,25 @@ AArenaPlayerPawn::AArenaPlayerPawn()
 	Collision->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
 	SetRootComponent(Collision);
 
-	Sprite = CreateDefaultSubobject<UPaperSpriteComponent>(TEXT("Sprite"));
-	Sprite->SetupAttachment(Collision);
-	Sprite->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Body = CreateDefaultSubobject<UPaperFlipbookComponent>(TEXT("Body"));
+	Body->SetupAttachment(Collision);
+	Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Body->SetRelativeScale3D(FVector(ArenaArt::PixelScale));
+
+	HeldFlail = CreateDefaultSubobject<UPaperSpriteComponent>(TEXT("HeldFlail"));
+	HeldFlail->SetupAttachment(Body);
+	HeldFlail->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	HeldFlail->SetRelativeLocation(HandOffset);
+	HeldFlail->SetRelativeScale3D(FVector(ArenaArt::FlailScale));
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(Collision);
-	Camera->SetUsingAbsoluteLocation(true);
+	Camera->SetRelativeLocation(FVector(0.f, CameraDistance, 0.f));
 	Camera->SetUsingAbsoluteRotation(true);
 	Camera->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
 	Camera->SetProjectionMode(ECameraProjectionMode::Orthographic);
+
+	Health = CreateDefaultSubobject<UHealthComponent>(TEXT("Health"));
 }
 
 void AArenaPlayerPawn::BeginPlay()
@@ -45,15 +67,29 @@ void AArenaPlayerPawn::BeginPlay()
 	SetActorLocation(Start);
 
 	Camera->SetOrthoWidth(CameraViewWidth);
-	Camera->SetWorldLocation(FVector(Start.X, CameraDistance, Start.Z));
+	Body->SetFlipbook(IdleAnim);
+	Body->SetSpriteColor(BodyTint);
+	HeldFlail->SetSprite(FlailHandleSprite);
+
+	Health->OnDepleted.AddUObject(this, &AArenaPlayerPawn::Die);
 }
 
 void AArenaPlayerPawn::NotifyControllerChanged()
 {
 	Super::NotifyControllerChanged();
 
-	const APlayerController* PlayerController = Cast<APlayerController>(GetController());
-	if (PlayerController && InputMapping)
+	APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	PlayerController->bShowMouseCursor = true;
+	FInputModeGameAndUI InputMode;
+	InputMode.SetHideCursorDuringCapture(false);
+	PlayerController->SetInputMode(InputMode);
+
+	if (InputMapping)
 	{
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
 			ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
@@ -89,6 +125,11 @@ void AArenaPlayerPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	if (Health->IsDead())
+	{
+		return;
+	}
+
 	const FVector2D Direction = MoveInput.GetClampedToMaxSize(1.0);
 
 	FVector Location = GetActorLocation();
@@ -100,18 +141,147 @@ void AArenaPlayerPawn::Tick(float DeltaTime)
 	Location.Z = FMath::Clamp(Location.Z, -Limit, Limit);
 
 	SetActorLocation(Location);
-	UpdateCamera(DeltaTime);
+	UpdateAnimation(Direction);
+
+	const APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	if (PlayerController && PlayerController->WasInputKeyJustPressed(EKeys::RightMouseButton))
+	{
+		TryAutoAttack();
+	}
+
+	const bool bBlinkOff = Health->IsInvulnerable() &&
+		FMath::Fmod(GetWorld()->GetTimeSeconds(), BlinkPeriod) < BlinkPeriod * 0.5f;
+	Body->SetVisibility(!bBlinkOff, true);
+
+	UpdateStatusText();
 }
 
-void AArenaPlayerPawn::UpdateCamera(float DeltaTime)
+void AArenaPlayerPawn::TryAutoAttack()
 {
-	const FVector From = Camera->GetComponentLocation();
-	FVector To(GetActorLocation().X, From.Y, GetActorLocation().Z);
+	if (bChainOut)
+	{
+		return;
+	}
 
-	const double HalfWidth = CameraViewWidth * 0.5;
-	const double HalfHeight = HalfWidth / Camera->AspectRatio;
-	To.X = FMath::Clamp(To.X, -ArenaHalfSize + HalfWidth, ArenaHalfSize - HalfWidth);
-	To.Z = FMath::Clamp(To.Z, -ArenaHalfSize + HalfHeight, ArenaHalfSize - HalfHeight);
+	AArenaEnemy* Target = FindEnemyUnderCursor();
+	if (!Target)
+	{
+		return;
+	}
 
-	Camera->SetWorldLocation(FMath::VInterpTo(From, To, DeltaTime, CameraFollowSpeed));
+	FVector SpawnAt = GetActorLocation();
+	SpawnAt.Y = ChainDepth;
+
+	AArenaChainBall* Ball = GetWorld()->SpawnActor<AArenaChainBall>(SpawnAt, FRotator::ZeroRotator);
+	if (Ball)
+	{
+		Ball->Throw(this, Target, ChainBallSprite, FLinearColor::White, ChainSpeed, AutoDamage);
+		bChainOut = true;
+		PlayStrike();
+	}
+}
+
+AArenaEnemy* AArenaPlayerPawn::FindEnemyUnderCursor() const
+{
+	const APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	FVector CursorWorld;
+	FVector CursorDirection;
+	if (!PlayerController || !PlayerController->DeprojectMousePositionToWorld(CursorWorld, CursorDirection))
+	{
+		return nullptr;
+	}
+
+	AArenaEnemy* Best = nullptr;
+	double BestDistance = TNumericLimits<double>::Max();
+
+	for (TActorIterator<AArenaEnemy> It(GetWorld()); It; ++It)
+	{
+		const FVector EnemyLocation = It->GetActorLocation();
+
+		const double FromCursor = FVector2D(EnemyLocation.X - CursorWorld.X, EnemyLocation.Z - CursorWorld.Z).Size();
+		const double FromPlayer = FVector2D(EnemyLocation.X - GetActorLocation().X, EnemyLocation.Z - GetActorLocation().Z).Size();
+
+		if (FromCursor < It->GetRadius() + ClickRadius && FromPlayer <= AutoRange && FromCursor < BestDistance)
+		{
+			Best = *It;
+			BestDistance = FromCursor;
+		}
+	}
+	return Best;
+}
+
+void AArenaPlayerPawn::OnChainReturned()
+{
+	bChainOut = false;
+}
+
+bool AArenaPlayerPawn::ReceiveDamage(float Amount)
+{
+	return Health->ApplyDamage(Amount);
+}
+
+float AArenaPlayerPawn::GetRadius() const
+{
+	return Collision->GetScaledSphereRadius();
+}
+
+FVector AArenaPlayerPawn::GetHandLocation() const
+{
+	return HeldFlail->GetComponentLocation();
+}
+
+void AArenaPlayerPawn::PlayStrike()
+{
+	if (!StrikeAnim)
+	{
+		return;
+	}
+
+	Body->SetFlipbook(StrikeAnim);
+	Body->SetLooping(false);
+	Body->PlayFromStart();
+	StrikeEndsAt = GetWorld()->GetTimeSeconds() + StrikeAnim->GetTotalDuration();
+}
+
+void AArenaPlayerPawn::UpdateAnimation(const FVector2D& Direction)
+{
+	const bool bStriking = GetWorld()->GetTimeSeconds() < StrikeEndsAt;
+	if (!bStriking)
+	{
+		const bool bMoving = !Direction.IsNearlyZero();
+		UPaperFlipbook* Wanted = (bMoving && RunAnim) ? RunAnim.Get() : IdleAnim.Get();
+		if (Body->GetFlipbook() != Wanted)
+		{
+			Body->SetFlipbook(Wanted);
+			Body->SetLooping(true);
+			Body->Play();
+		}
+	}
+
+	if (FMath::Abs(Direction.X) > KINDA_SMALL_NUMBER)
+	{
+		const float Facing = Direction.X < 0.f ? -1.f : 1.f;
+		Body->SetRelativeScale3D(FVector(Facing * ArenaArt::PixelScale, ArenaArt::PixelScale, ArenaArt::PixelScale));
+	}
+}
+
+void AArenaPlayerPawn::UpdateStatusText() const
+{
+	if (GEngine)
+	{
+		const FString Status = FString::Printf(TEXT("Nikki HP %.0f / %.0f%s"),
+			Health->GetHealth(), Health->GetMaxHealth(), bChainOut ? TEXT("   (chain out)") : TEXT(""));
+		GEngine->AddOnScreenDebugMessage(StatusMessageKey, 1.f, FColor(255, 140, 200), Status);
+	}
+}
+
+void AArenaPlayerPawn::Die()
+{
+	Body->SetVisibility(false, true);
+	UpdateStatusText();
+
+	if (AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>())
+	{
+		GameMode->OnPlayerDied();
+	}
 }
