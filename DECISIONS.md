@@ -1,148 +1,120 @@
 # Decisions
 
-Running log of the calls I made on this project. Newest at the bottom. Each entry says what I picked, what I gave up, and why.
+The calls I made on this project, newest at the bottom. Each entry gives what I picked, what I gave up, and why.
+
+## Contents
+
+1. [001 · Running Unreal C++ on an 8GB machine: cutting memory use around the editor](#001-running-unreal-c-on-an-8gb-machine)
+2. [002 · Paper2D sprites at a fixed 4 world units per art pixel](#002-paper2d-sprites-at-a-fixed-pixel-scale)
+3. [003 · How AI fits in: I design gameplay logic, AI builds UI glue](#003-how-ai-fits-in)
+4. [004 · Installing the engine through Epic's preview launcher after the old one broke](#004-installing-the-engine-through-epics-preview-launcher)
+5. [005 · A top-down game on Paper2D's side-view X/Z axes](#005-a-top-down-game-on-paper2ds-side-view-axes)
+6. [006 · Right-click: attack an enemy, or walk to the ground; out-of-range attacks walk into range first](#006-right-click-attacks-or-walks)
+7. [007 · UI drawn from C++ on the HUD canvas instead of UMG widgets](#007-ui-drawn-from-c-on-the-hud-canvas)
+8. [008 · Glow and fog through one sprite material and one post-process material](#008-glow-and-fog-through-two-materials)
 
 ---
 
-## 001: Unreal C++ on an 8GB machine
+## 001: Running Unreal C++ on an 8GB machine
 
-**Date:** 2026-11-05
-**Status:** Accepted
+**2026-11-05**
 
-### Context
+**Context.** I had about 30 hours, a Ryzen 7 3700X, an RTX 3050 and 8GB of RAM. Epic recommends 32GB. The editor, the C++ compiler and the shader compiler all compete for that memory.
 
-I'm building this in about 30 hours for an application deadline. My PC is a Ryzen 7 3700X, an RTX 3050, and 8GB of RAM. Epic recommends 32GB. Upgrading tonight isn't an option.
+**Decision.**
+- Blank template with no starter content. Lumen, ray tracing and virtual shadow maps are off, and editor scalability is set to Low.
+- UnrealBuildTool is capped at 4 parallel actions, with a fixed 16GB pagefile as a safety net.
+- No IDE runs. Header changes get a full build with the editor closed. Body-only changes use Live Coding.
 
-On 8GB, the editor, the C++ compiler and the shader compiler all fight over memory. That means swapping, slow builds, or the editor dying mid-compile. I still want Unreal and C++, so the job is to cut everything around them that eats memory without cutting the game.
-
-### Decision
-
-- **Project:** Blank template, no starter content, no ray tracing. I left the quality preset on Maximum at creation, but the rendering overrides below are what actually matter.
-- **Rendering:** Lumen off (Dynamic GI and Reflections set to None), regular shadow maps instead of virtual shadow maps, editor scalability on Low.
-- **Compiling:** UnrealBuildTool capped at 4 parallel actions in `BuildConfiguration.xml`, so one build can't eat all my RAM. A fixed 16GB pagefile on my SSD as a safety net.
-- **No IDE running.** Visual Studio is installed only for its compiler and never opened. I compile from the editor:
-  - `.cpp` body change: Live Coding (Ctrl+Alt+F11).
-  - Header change (new member, new UPROPERTY, new class): close the editor and reopen the `.uproject` so it rebuilds. Live Coding on header changes causes fake bugs, so I don't do it.
-- **Nothing else open while compiling.** That includes the browser.
-- **Package early.** I'll package a throwaway build while the game is tiny, so the first slow cook and any packaging bugs show up while I still have time to fix them.
-
-### Consequences
-
-- The game doesn't use Unreal's flagship rendering. For a 2D arena game that's not a real loss.
-- Full rebuilds are slower than on a normal dev machine, and every header change costs an editor restart. I batch header changes to keep that rare.
-- Real numbers from my machine (filled in as I go):
-  - First shader compile: __ min
-  - First C++ build: __ min
-  - Live Coding change: __ s
-  - First packaged build: __ min
+**Cost.** Header changes cost an editor restart, so I batch them.
 
 ---
 
-## 002: 2D with Paper2D
+## 002: Paper2D sprites at a fixed pixel scale
 
-**Date:** 2026-11-05
-**Status:** Accepted
+**2026-11-05**
 
-### Context
+**Options.** I compared Paper2D sprites (picked), flat 3D shapes, and Paper2D tilemaps. Tilemaps are built for levels, and I have one arena.
 
-I want a top-down arena game in the style of Brotato: one player, one square arena, enemies coming at you. I want it to look good fast, with art I can make myself in the time I have.
+**Decision.**
+- Every sprite imports at the same density, and the code scales them to 4 world units per art pixel (`ArenaArt.h`). That way the characters and the arena never mismatch.
+- Textures use nearest filtering and no mipmaps, and anti-aliasing and motion blur are off.
 
-### Options I looked at
-
-- **Paper2D sprites** (picked). True 2D pixel art, unlit, cheap to render.
-- **2.5D with flat 3D shapes.** No art cost and the safest engine path, but it's not the look I want.
-- **Paper2D tilemaps.** Built for levels and rooms. I have one arena and no levels, so it's overhead.
-
-### Decision
-
-- Paper2D sprites and flipbooks with an orthographic camera.
-- Art is drawn at native pixel size and every sprite uses **Pixels Per Unit = 0.25**, so 1 art pixel is always 4 world units. The player (16px) and the arena (512px) stay at the same pixel density, so nothing looks mismatched.
-- Textures use Paper2D texture settings (nearest filtering, no mipmaps) and the project has anti-aliasing, auto exposure, bloom and motion blur off, so the pixel art stays crisp and the colors stay what I drew.
-
-### Consequences
-
-- Epic hasn't put much work into Paper2D in years. Rough edges are mine to work around and write up.
-- Sprites are unlit, so I don't need lights at all. That also helps with decision 001.
+**Cost.** Epic has not invested in Paper2D in years, so its rough edges are mine to work around.
 
 ---
 
-## 003: How I use AI on this project
+## 003: How AI fits in
 
-**Date:** 2026-11-05
-**Status:** Accepted
+**2026-11-05, revised 2026-11-13**
 
-I own every line in this repo. The workflow:
-
-1. I name the next feature.
-2. Claude gives me at least 3 ways to build it, each with its tradeoff.
-3. I pick one and write the pseudocode.
-4. Claude corrects it or pitches an algorithm tweak. I decide if the tweak is worth it over the simple version.
-5. Claude turns my pseudocode into C++, and I read every line before it goes in.
-
-When I let Claude write something tedious without my pseudocode, the commit message says so.
+- **Gameplay logic** (movement, combat, enemy AI, waves): I design it and write pseudocode. Claude turns it into C++, and I review every line.
+- **UI, art pipeline and engine hookups:** Claude builds these and I steer the result. I'm primarily a backend developer, and this is client glue rather than game logic.
 
 ---
 
 ## 004: Installing the engine through Epic's preview launcher
 
-**Date:** 2026-11-05
-**Status:** Accepted
+**2026-11-05**
 
-### Context
+**Context.** In the regular Epic launcher, the **+** for adding an engine version was grayed out. None of these fixed it: reinstalling, signing out, clearing caches, running as admin, or the fixes in Epic's forum thread. A brand new account had the same problem, so the cause was the launcher, not my account.
 
-Before I wrote a line of code, the engine wouldn't install.
+**Options.**
+- Building from source needed over 100GB of disk and hours of compiling on 8GB of RAM.
+- Waiting on support would take days.
+- The preview launcher (picked) worked on the first try.
 
-- I had to clear drive space first just to fit the engine.
-- In the regular Epic Games Launcher, the Library page loaded without the Engine Versions row. Once that row did show up, the **+** to add an engine version was grayed out, and the Install Engine button did nothing.
-- What I tried, none of which worked:
-  - checked for a dialog hiding behind the window
-  - signed out and back in
-  - fully exited from the system tray and relaunched
-  - switched panels and came back
-  - restarted the PC
-  - ran the launcher as administrator
-  - cleared the launcher's web cache
-- Then I worked through the fixes from Epic's forum thread on this exact bug: "sign in later," filling in the account's first and last name, hiding and unhiding the library, and a clean reinstall. None of them worked either.
-- I made a brand new Epic account with every name field filled in, to rule out my account being the problem. Same result. That told me it wasn't my account. It was the launcher itself on my machine, and the forum thread had people stuck on it for a month.
-
-### Options I looked at
-
-- **Build Unreal from the GitHub source.** Official, but it needs over 100GB of disk I had just cleared out, and building the whole engine on 8GB of RAM would take hours. Not possible inside the deadline.
-- **Wait on Epic support.** Official, but replies take days.
-- **Epic's new launcher (Preview)** (picked). It's a separate app, and installing it replaces the old launcher. One forum post said it deleted someone's projects, but I had zero projects, so that risk didn't apply to me.
-
-### Decision
-
-I installed the preview launcher and installed UE 5.8 from it. It worked on the first try.
-
-### Consequences
-
-- I'm on preview software for the launcher. The project lives in git, so a launcher problem can't cost me work.
-- If anyone cloning this repo hits the same grayed out **+**, the preview launcher is the way around it.
-- Time lost to this: __ hours.
+**Cost.** The launcher is preview software. The project lives in git, so a launcher problem can't cost me work.
 
 ---
 
-## 005: Top-down game on Paper2D's side-view axes
+## 005: A top-down game on Paper2D's side-view axes
 
-**Date:** 2026-11-06
-**Status:** Accepted
+**2026-11-06**
 
-### Context
+**Options.**
+- Lay sprites flat. This fights Paper2D on every sprite.
+- Keep sprites upright and play in X/Z (picked).
+- Drop Paper2D for 3D quads.
 
-Paper2D is built for side-scrollers. It draws sprites standing up in the X/Z plane. My game is top-down.
+**Decision.** X is screen-right and Z is screen-up. The camera looks along Y. There is no gravity, so "up = Z" costs nothing.
 
-### Options I looked at
+**Cost.** Readers must know Z means up the screen, not height.
 
-- **Lay sprites flat and look down the Z axis.** That fights Paper2D on every sprite and every spawn.
-- **Keep sprites upright and lay out the game in X/Z** (picked).
-- **Drop Paper2D for 3D quads.** That reopens decision 002.
+---
 
-### Decision
+## 006: Right-click attacks or walks
 
-X is screen-right, Z is screen-up, and the camera looks along Y. Nothing in the game uses gravity, so it doesn't matter that "up" is the Z axis.
+**2026-11-13**
 
-### Consequences
+- Right-clicking an enemy throws the auto attack.
+- If the enemy is out of range, Nikki walks into range and the auto fires on arrival. The walk point is fixed at click time, even if the enemy moves. That keeps the code simple, and the input buffer feels generous.
+- Right-clicking the ground walks there. WASD cancels both.
+- Hovering an enemy outlines it in red and turns the cursor into a sword, so it's always clear when a click means attack.
 
-- There's zero rotation math anywhere.
-- Anyone reading the code needs to know Z means "up the screen," not height. The player class says that once in a comment.
+---
+
+## 007: UI drawn from C++ on the HUD canvas
+
+**2026-11-13**
+
+**Options.**
+- UMG widget Blueprints (the usual choice): polished, but every element is an editor asset.
+- An `AHUD` subclass drawing directly to the canvas (picked).
+
+**Why.** Health bars, the wave banner and the mana bar are all rectangles, text and sprite icons. The canvas does that in a few draw calls with no assets. Each bar reads its `UHealthComponent`, so new enemy types get bars for free.
+
+**Cost.** No visual layout editor. If the UI grows into menus, UMG is the move.
+
+---
+
+## 008: Glow and fog through two materials
+
+**2026-11-13**
+
+**Decision.**
+- One shared sprite material adds glow and the hover outline to every character and projectile.
+- One post-process material on the camera adds drifting fog anchored to the world.
+- Bloom and a shared color grade pull the different art packs into one palette.
+
+**Cost.** This reverses 002's "bloom off". The look is now graded and not exactly as drawn. Both materials are generated by `ArtSource/setup_assets.py`, so the look is reproducible.
