@@ -13,6 +13,8 @@ OUT = ROOT / "Import"
 PACK = ROOT / "packs" / "0x72" / "0x72_DungeonTilesetII_v1.7" / "frames"
 FLAIL_SHEET = ROOT / "packs" / "flail-dcss" / "flail-DCSS.png"
 FLOOR_TARGET = ROOT.parent / "Project_Riot" / "Content" / "Art" / "T_ArenaFloor.png"
+CURSOR_PACK = ROOT / "packs" / "kenney-cursor-pixel"
+CURSOR_TARGET = ROOT.parent / "Project_Riot" / "Content" / "Slate" / "Cursors"
 
 NIKKI_SHEETS = {"Idle": "sprite.png", "Run": "run.png", "Strike": "use_f.png", "Death": "death.png"}
 NIKKI_FRAME = (16, 24)
@@ -21,6 +23,13 @@ RED_FLAIL_CELL = (128, 64, 160, 96)
 FLOOR_PIXELS = 512
 WALL_PIXELS = 16
 WALL_BACKING = (28, 22, 30, 255)
+# Darker, cooler floor so the glowing characters carry the contrast.
+FLOOR_TONE = (0.62, 0.58, 0.74)
+
+# Hardware cursors per hero: Kenney's white-with-black-outline tiles, tinted and scaled up.
+CURSOR_SCALE = 3
+HERO_CURSORS = {"Nikki": (255, 105, 190)}
+CURSOR_TILES = {"Pointer": "tile_0048.png", "Sword": "tile_0106.png"}
 
 
 def split_sheet(sheet_path, frame_size, prefix):
@@ -130,8 +139,20 @@ def export_floor():
             else:
                 tile = rng.choices(floors, weights)[0]
             floor.alpha_composite(tile, (col * WALL_PIXELS, row * WALL_PIXELS))
+    floor = Image.merge("RGBA", [band.point(lambda v, k=k: int(v * k)) for band, k in zip(floor.split()[:3], FLOOR_TONE)] + [floor.split()[3]])
     floor.save(FLOOR_TARGET)
     floor.save(ROOT / "T_ArenaFloor.png")
+
+
+def export_cursors():
+    CURSOR_TARGET.mkdir(parents=True, exist_ok=True)
+    for hero, colour in HERO_CURSORS.items():
+        for name, tile in CURSOR_TILES.items():
+            cursor = Image.open(CURSOR_PACK / tile).convert("RGBA")
+            pixels = [(*colour, a) if (r, g, b) == (255, 255, 255) and a else (r, g, b, a) for r, g, b, a in cursor.getdata()]
+            cursor.putdata(pixels)
+            size = (cursor.width * CURSOR_SCALE, cursor.height * CURSOR_SCALE)
+            cursor.resize(size, Image.NEAREST).save(CURSOR_TARGET / f"{hero}_{name}.png")
 
 
 def main():
@@ -141,6 +162,7 @@ def main():
     export_flail()
     export_bead()
     export_floor()
+    export_cursors()
 
 
 if __name__ == "__main__":

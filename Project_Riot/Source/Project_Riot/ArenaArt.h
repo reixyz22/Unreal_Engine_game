@@ -6,7 +6,10 @@ namespace ArenaArt
 {
 	// Sprites import at 1 pixel per unit; the arena is drawn at 4 units per pixel.
 	constexpr float PixelScale = 4.f;
-
 	// The flail art is drawn larger than the characters; shrink it to fit her hand.
 	constexpr float FlailScale = 0.6f;
+
+	// M_ArenaSprite draws a 1px outline in this color; alpha 0 hides it.
+	inline const FName OutlineParam(TEXT("OutlineColor"));
+	inline const FLinearColor HoverOutline(4.f, 0.15f, 0.1f, 1.f);
 }

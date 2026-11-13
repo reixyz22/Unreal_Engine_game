@@ -1,7 +1,7 @@
 #include "ArenaGameMode.h"
 
 #include "ArenaEnemy.h"
-#include "Engine/Engine.h"
+#include "ArenaHUD.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
@@ -12,7 +12,11 @@ namespace
 	constexpr float CheckInterval = 0.5f;
 	constexpr float RestartDelay = 3.f;
 	constexpr int32 SpawnAttempts = 8;
-	constexpr int32 RoundMessageKey = 1;
+}
+
+AArenaGameMode::AArenaGameMode()
+{
+	HUDClass = AArenaHUD::StaticClass();
 }
 
 void AArenaGameMode::BeginPlay()
@@ -34,9 +38,32 @@ void AArenaGameMode::CheckWave()
 		return;
 	}
 
+	PlanWave();
 	bWaveQueued = true;
 	const float Delay = Round == 0 ? 0.1f : SecondsBetweenWaves;
 	GetWorldTimerManager().SetTimer(WaveTimer, this, &AArenaGameMode::StartNextWave, Delay, false);
+}
+
+void AArenaGameMode::PlanWave()
+{
+	Wave.Reset();
+	if (EnemyTypes.IsEmpty())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BP_ArenaGameMode has no Enemy Types; waves will be empty."));
+		return;
+	}
+
+	const int32 WaveSize = FMath::Min(FirstWaveSize + ExtraEnemiesPerRound * Round, MaxWaveSize);
+	for (int32 Index = 0; Index < WaveSize; ++Index)
+	{
+		const TSubclassOf<AArenaEnemy> Type = EnemyTypes[FMath::RandRange(0, EnemyTypes.Num() - 1)];
+		FWaveGroup* Group = Wave.FindByPredicate([Type](const FWaveGroup& G) { return G.Type == Type; });
+		if (!Group)
+		{
+			Group = &Wave.Add_GetRef(FWaveGroup{ Type });
+		}
+		++Group->Count;
+	}
 }
 
 void AArenaGameMode::StartNextWave()
@@ -44,22 +71,13 @@ void AArenaGameMode::StartNextWave()
 	bWaveQueued = false;
 	++Round;
 
-	if (!PyroAnim || !BeadSprite)
+	for (const FWaveGroup& Group : Wave)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("BP_ArenaGameMode is missing Pyro Anim or Bead Sprite; Pyros and beads will be invisible."));
-	}
-
-	const int32 WaveSize = FMath::Min(FirstWaveSize + ExtraEnemiesPerRound * (Round - 1), MaxWaveSize);
-	for (int32 Index = 0; Index < WaveSize; ++Index)
-	{
-		AArenaEnemy* Enemy = GetWorld()->SpawnActor<AArenaEnemy>(PickSpawnPoint(), FRotator::ZeroRotator);
-		if (Enemy)
+		for (int32 Index = 0; Index < Group.Count; ++Index)
 		{
-			Enemy->Init(PyroAnim, BeadSprite, PyroTint);
+			GetWorld()->SpawnActor<AArenaEnemy>(Group.Type, PickSpawnPoint(), FRotator::ZeroRotator);
 		}
 	}
-
-	ShowRoundText();
 }
 
 FVector AArenaGameMode::PickSpawnPoint() const
@@ -98,25 +116,9 @@ int32 AArenaGameMode::CountEnemies() const
 	return Count;
 }
 
-void AArenaGameMode::ShowRoundText() const
-{
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(RoundMessageKey, 1000.f, FColor::White,
-			FString::Printf(TEXT("Round %d"), Round));
-	}
-}
-
 void AArenaGameMode::OnPlayerDied()
 {
 	bPlayerDead = true;
-
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(RoundMessageKey, RestartDelay, FColor::Red,
-			FString::Printf(TEXT("Nikki fell. Rounds survived: %d"), FMath::Max(0, Round - 1)));
-	}
-
 	GetWorldTimerManager().SetTimer(RestartTimer, this, &AArenaGameMode::RestartArena, RestartDelay, false);
 }
 

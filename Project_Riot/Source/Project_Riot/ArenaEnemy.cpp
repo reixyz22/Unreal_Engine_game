@@ -1,20 +1,17 @@
 #include "ArenaEnemy.h"
 
 #include "ArenaArt.h"
-#include "ArenaProjectile.h"
 #include "Components/SphereComponent.h"
-#include "Engine/World.h"
-#include "EngineUtils.h"
 #include "HealthComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "PaperFlipbook.h"
 #include "PaperFlipbookComponent.h"
-#include "TimerManager.h"
 
 namespace
 {
 	constexpr float EnemyDepth = 8.f;
-	constexpr float BeadDepth = 14.f;
-	constexpr float TooCloseFraction = 0.75f;
+	const FLinearColor HitFlash(1.f, 0.35f, 0.35f);
 }
 
 AArenaEnemy::AArenaEnemy()
@@ -34,14 +31,6 @@ AArenaEnemy::AArenaEnemy()
 	Health = CreateDefaultSubobject<UHealthComponent>(TEXT("Health"));
 }
 
-void AArenaEnemy::Init(UPaperFlipbook* BodyAnim, UPaperSprite* InBeadSprite, const FLinearColor& InTint)
-{
-	Body->SetFlipbook(BodyAnim);
-	BeadSprite = InBeadSprite;
-	Tint = InTint;
-	Body->SetSpriteColor(Tint);
-}
-
 void AArenaEnemy::BeginPlay()
 {
 	Health->SetMaxHealth(MaxHealth);
@@ -51,15 +40,17 @@ void AArenaEnemy::BeginPlay()
 	Start.Y = EnemyDepth;
 	SetActorLocation(Start);
 
-	Health->OnDepleted.AddUObject(this, &AArenaEnemy::Die);
+	Body->SetFlipbook(BodyAnim);
+	Body->SetSpriteColor(Tint);
+	BodyMaterial = Body->CreateDynamicMaterialInstance(0);
 
-	const float FirstShotDelay = FMath::FRandRange(0.5f, FireInterval);
-	GetWorldTimerManager().SetTimer(FireTimer, this, &AArenaEnemy::Fire, FireInterval, true, FirstShotDelay);
+	Health->OnDepleted.AddUObject(this, &AArenaEnemy::Die);
 }
 
-float AArenaEnemy::GetRadius() const
+void AArenaEnemy::Tick(float DeltaTime)
 {
-	return Collision->GetScaledSphereRadius();
+	Super::Tick(DeltaTime);
+	Body->SetSpriteColor(Health->IsInvulnerable() ? HitFlash : Tint);
 }
 
 bool AArenaEnemy::ReceiveDamage(float Amount)
@@ -67,81 +58,33 @@ bool AArenaEnemy::ReceiveDamage(float Amount)
 	return Health->ApplyDamage(Amount);
 }
 
-void AArenaEnemy::Tick(float DeltaTime)
+float AArenaEnemy::GetRadius() const
 {
-	Super::Tick(DeltaTime);
+	return Collision->GetScaledSphereRadius();
+}
 
-	const APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0);
-	if (!Player)
+void AArenaEnemy::SetHovered(bool bHovered)
+{
+	if (BodyMaterial)
 	{
-		return;
+		BodyMaterial->SetVectorParameterValue(ArenaArt::OutlineParam, bHovered ? ArenaArt::HoverOutline : FLinearColor::Transparent);
 	}
+}
 
-	FVector ToPlayer = Player->GetActorLocation() - GetActorLocation();
-	ToPlayer.Y = 0.f;
-	const double Distance = ToPlayer.Size();
-	const FVector TowardPlayer = ToPlayer.GetSafeNormal();
+UPaperSprite* AArenaEnemy::GetIcon() const
+{
+	return BodyAnim ? BodyAnim->GetSpriteAtFrame(0) : nullptr;
+}
 
-	FVector Desired = FVector::ZeroVector;
-	if (Distance > PreferredRange)
-	{
-		Desired = TowardPlayer;
-	}
-	else if (Distance < PreferredRange * TooCloseFraction)
-	{
-		Desired = -TowardPlayer;
-	}
-	Desired += ComputeSeparation() * SpreadStrength;
+APawn* AArenaEnemy::GetPlayer() const
+{
+	return UGameplayStatics::GetPlayerPawn(this, 0);
+}
 
-	AddActorWorldOffset(Desired.GetClampedToMaxSize(1.0) * MoveSpeed * DeltaTime);
-
-	const float Facing = TowardPlayer.X < 0.0 ? -1.f : 1.f;
+void AArenaEnemy::FaceToward(double DirectionX)
+{
+	const float Facing = DirectionX < 0.0 ? -1.f : 1.f;
 	Body->SetRelativeScale3D(FVector(Facing * ArenaArt::PixelScale, ArenaArt::PixelScale, ArenaArt::PixelScale));
-
-	const bool bFlash = Health->IsInvulnerable();
-	Body->SetSpriteColor(bFlash ? FLinearColor(1.f, 0.35f, 0.35f) : Tint);
-}
-
-FVector AArenaEnemy::ComputeSeparation() const
-{
-	FVector Push = FVector::ZeroVector;
-	for (TActorIterator<AArenaEnemy> It(GetWorld()); It; ++It)
-	{
-		if (*It == this)
-		{
-			continue;
-		}
-
-		FVector Away = GetActorLocation() - It->GetActorLocation();
-		Away.Y = 0.f;
-		const double Distance = Away.Size();
-		if (Distance > KINDA_SMALL_NUMBER && Distance < SpreadDistance)
-		{
-			Push += Away / Distance * (1.0 - Distance / SpreadDistance);
-		}
-	}
-	return Push;
-}
-
-void AArenaEnemy::Fire()
-{
-	const APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0);
-	if (!Player)
-	{
-		return;
-	}
-
-	FVector Direction = Player->GetActorLocation() - GetActorLocation();
-	Direction.Y = 0.f;
-
-	FVector SpawnAt = GetActorLocation();
-	SpawnAt.Y = BeadDepth;
-
-	AArenaProjectile* Bead = GetWorld()->SpawnActor<AArenaProjectile>(SpawnAt, FRotator::ZeroRotator);
-	if (Bead)
-	{
-		Bead->Launch(BeadSprite, FLinearColor::White, Direction.GetSafeNormal() * BeadSpeed, BeadDamage);
-	}
 }
 
 void AArenaEnemy::Die()
