@@ -176,21 +176,20 @@ void AArenaPlayerPawn::UpdateHover()
 {
 	FVector Cursor;
 	AArenaEnemy* Enemy = GetCursorWorldLocation(Cursor) ? FindEnemyNear(Cursor) : nullptr;
-	if (Enemy == HoveredEnemy.Get())
+	if (Enemy != HoveredEnemy.Get())
 	{
-		return;
+		if (HoveredEnemy.IsValid())
+		{
+			HoveredEnemy->SetHovered(false);
+		}
+		if (Enemy)
+		{
+			Enemy->SetHovered(true);
+		}
+		HoveredEnemy = Enemy;
 	}
 
-	if (HoveredEnemy.IsValid())
-	{
-		HoveredEnemy->SetHovered(false);
-	}
-	if (Enemy)
-	{
-		Enemy->SetHovered(true);
-	}
-	HoveredEnemy = Enemy;
-
+	// Set every frame: a hovered enemy can die, which would otherwise leave the sword cursor up.
 	if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
 	{
 		PlayerController->CurrentMouseCursor = Enemy ? EMouseCursor::Crosshairs : EMouseCursor::Default;
@@ -235,7 +234,7 @@ void AArenaPlayerPawn::UpdateMovement(float DeltaTime)
 	Location.X += Direction.X * MoveSpeed * DeltaTime;
 	Location.Z += Direction.Y * MoveSpeed * DeltaTime;
 
-	const double Limit = ArenaHalfSize - WallThickness - Collision->GetScaledSphereRadius();
+	const double Limit = ArenaArt::ArenaHalfSize - ArenaArt::WallThickness - Collision->GetScaledSphereRadius();
 	Location.X = FMath::Clamp(Location.X, -Limit, Limit);
 	Location.Z = FMath::Clamp(Location.Z, -Limit, Limit);
 

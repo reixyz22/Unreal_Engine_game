@@ -20,14 +20,14 @@ NIKKI_SHEETS = {"Idle": "sprite.png", "Run": "run.png", "Strike": "use_f.png", "
 NIKKI_FRAME = (16, 24)
 
 RED_FLAIL_CELL = (128, 64, 160, 96)
-FLOOR_PIXELS = 512
+FLOOR_PIXELS = 768
 WALL_PIXELS = 16
 WALL_BACKING = (28, 22, 30, 255)
 # Darker, cooler floor so the glowing characters carry the contrast.
 FLOOR_TONE = (0.62, 0.58, 0.74)
 
 # Hardware cursors per hero: Kenney's white-with-black-outline tiles, tinted and scaled up.
-CURSOR_SCALE = 3
+CURSOR_SCALE = 2
 HERO_CURSORS = {"Nikki": (255, 105, 190)}
 CURSOR_TILES = {"Pointer": "tile_0048.png", "Sword": "tile_0106.png"}
 

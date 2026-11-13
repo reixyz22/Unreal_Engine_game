@@ -10,7 +10,7 @@ Character sprites (idle, run, strike, death) built with **[Pixel Art Sprite Mixe
 Red spiked flail from **[CC0 Flail Icons](https://opengameart.org/content/cc0-flail-icons)** collected by AntumDeluge, originally from Dungeon Crawl Stone Soup, CC0. `build_art.py` splits it into the handle and the ball.
 
 ## Cursors
-**[Cursor Pixel Pack](https://kenney.nl/assets/cursor-pixel-pack) by Kenney**, CC0. `build_art.py` tints the arrow and sword tiles per hero and scales them up 3x.
+**[Cursor Pixel Pack](https://kenney.nl/assets/cursor-pixel-pack) by Kenney**, CC0. `build_art.py` tints the arrow and sword tiles per hero and scales them up 2x.
 
 ## Placeholders
 `T_Player.png` and the Pyro bead (`Pyro_Bead.png`) are simple placeholder shapes drawn by script for this project, not taken from any pack.

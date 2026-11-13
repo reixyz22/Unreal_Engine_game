@@ -66,9 +66,6 @@ private:
 	float SecondsBetweenWaves = 2.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Waves")
-	float ArenaHalfSize = 1024.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Waves")
 	float SpawnInset = 120.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Waves")

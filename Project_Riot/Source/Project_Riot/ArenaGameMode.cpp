@@ -1,5 +1,6 @@
 #include "ArenaGameMode.h"
 
+#include "ArenaArt.h"
 #include "ArenaEnemy.h"
 #include "ArenaHUD.h"
 #include "Engine/World.h"
@@ -82,7 +83,7 @@ void AArenaGameMode::StartNextWave()
 
 FVector AArenaGameMode::PickSpawnPoint() const
 {
-	const double Edge = ArenaHalfSize - SpawnInset;
+	const double Edge = ArenaArt::ArenaHalfSize - SpawnInset;
 	const APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0);
 
 	FVector Point = FVector::ZeroVector;

@@ -77,13 +77,7 @@ private:
 	TObjectPtr<UInputAction> MoveAction;
 
 	UPROPERTY(EditAnywhere, Category = "Movement")
-	float MoveSpeed = 600.f;
-
-	UPROPERTY(EditAnywhere, Category = "Arena")
-	float ArenaHalfSize = 1024.f;
-
-	UPROPERTY(EditAnywhere, Category = "Arena")
-	float WallThickness = 64.f;
+	float MoveSpeed = 400.f;
 
 	UPROPERTY(EditAnywhere, Category = "Camera")
 	float CameraViewWidth = 1280.f;

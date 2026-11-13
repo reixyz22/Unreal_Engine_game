@@ -25,9 +25,9 @@ float N = Texture2DSample(Tex, TexSampler, UV + float2(Px.x, 0)).a;
 N = max(N, Texture2DSample(Tex, TexSampler, UV - float2(Px.x, 0)).a);
 N = max(N, Texture2DSample(Tex, TexSampler, UV + float2(0, Px.y)).a);
 N = max(N, Texture2DSample(Tex, TexSampler, UV - float2(0, Px.y)).a);
-float Edge = saturate(N - C.a) * Outline.a;
-float3 Rgb = C.rgb * Tint.rgb * Glow;
-return float4(lerp(Rgb, Outline.rgb, Edge), max(C.a * Tint.a, Edge));
+float Edge = saturate(N - C.a) * OutlineA;
+float3 Rgb = C.rgb * Tint * Glow;
+return float4(lerp(Rgb, Outline, Edge), max(C.a * TintA, Edge));
 """
 
 FOG_HLSL = """
@@ -101,9 +101,11 @@ def build_sprite_material():
     glow.set_editor_property("default_value", 1.35)
 
     node = custom_node(material, SPRITE_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT4,
-                       ["Tex", "UV", "Tint", "Outline", "Glow"], -300)
-    for source, pin in ((texture, "Tex"), (uv, "UV"), (tint, "Tint"), (outline, "Outline"), (glow, "Glow")):
-        MEL.connect_material_expressions(source, "", node, pin)
+                       ["Tex", "UV", "Tint", "TintA", "Outline", "OutlineA", "Glow"], -300)
+    # Color pins carry RGB only, so each alpha comes in on its own pin.
+    for source, out, pin in ((texture, "", "Tex"), (uv, "", "UV"), (tint, "", "Tint"), (tint, "A", "TintA"),
+                             (outline, "", "Outline"), (outline, "A", "OutlineA"), (glow, "", "Glow")):
+        MEL.connect_material_expressions(source, out, node, pin)
 
     MEL.connect_material_property(mask(material, node, "rgb", -100, -50), "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     MEL.connect_material_property(mask(material, node, "a", -100, 100), "", unreal.MaterialProperty.MP_OPACITY_MASK)
@@ -170,6 +172,15 @@ def reimport_floor():
     TOOLS.import_asset_tasks([task])
 
 
+def fit_floor_sprite():
+    sprite = unreal.load_asset(f"{ART}/T_ArenaFloor_Sprite")
+    texture = unreal.load_asset(f"{ART}/T_ArenaFloor")
+    size = unreal.Vector2D(texture.blueprint_get_size_x(), texture.blueprint_get_size_y())
+    sprite.set_editor_property("source_uv", unreal.Vector2D(0, 0))
+    sprite.set_editor_property("source_dimension", size)
+    EAL.save_loaded_asset(sprite, False)
+
+
 def blueprint(name, parent_class):
     path = f"{CORE}/{name}"
     if EAL.does_asset_exist(path):
@@ -189,6 +200,7 @@ def set_defaults(bp, **values):
 
 def main():
     reimport_floor()
+    fit_floor_sprite()
     sprite_material = build_sprite_material()
     bright = build_bright_instance(sprite_material)
     fog = build_fog_material()
