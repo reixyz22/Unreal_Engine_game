@@ -87,6 +87,15 @@ void AArenaEnemy::FaceToward(double DirectionX)
 	Body->SetRelativeScale3D(FVector(Facing * ArenaArt::PixelScale, ArenaArt::PixelScale, ArenaArt::PixelScale));
 }
 
+void AArenaEnemy::MoveWithinArena(const FVector& Offset)
+{
+	const double Limit = ArenaArt::ArenaHalfSize - ArenaArt::WallThickness - GetRadius();
+	FVector Location = GetActorLocation() + Offset;
+	Location.X = FMath::Clamp(Location.X, -Limit, Limit);
+	Location.Z = FMath::Clamp(Location.Z, -Limit, Limit);
+	SetActorLocation(Location);
+}
+
 void AArenaEnemy::Die()
 {
 	Destroy();

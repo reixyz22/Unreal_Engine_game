@@ -11,6 +11,8 @@ namespace
 	constexpr float WarningThickness = 6.f;
 	constexpr float BeamDepth = 12.f;
 	const FLinearColor WarningTint(1.f, 0.75f, 0.3f);
+	constexpr double WarningGrowSeconds = 0.3;
+	constexpr double ActiveGrowSeconds = 0.08;
 }
 
 AArenaBeam::AArenaBeam()
@@ -25,30 +27,45 @@ AArenaBeam::AArenaBeam()
 void AArenaBeam::Fire(UPaperSprite* BeamSprite, const FVector& InStart, const FVector& InDirection, const FSettings& InSettings)
 {
 	Start = InStart;
+	Start.Y = BeamDepth;
 	Direction = InDirection.GetSafeNormal();
+	Direction.Y = 0.0;
 	Settings = InSettings;
-	ActiveAt = GetWorld()->GetTimeSeconds() + Settings.WarningSeconds;
+	FireSound = Settings.FireSound;
+	FiredAt = GetWorld()->GetTimeSeconds();
+	ActiveAt = FiredAt + Settings.WarningSeconds;
 	SetLifeSpan(Settings.WarningSeconds + Settings.ActiveSeconds);
 
-	// The sprite is centred, so sit halfway along the beam and rotate it within the X/Z plane.
-	FVector Middle = Start + Direction * (BeamLength * 0.5);
-	Middle.Y = BeamDepth;
-	SetActorLocation(Middle);
 	SetActorRotation(FRotator(FMath::RadiansToDegrees(FMath::Atan2(Direction.Z, Direction.X)), 0.f, 0.f));
-
 	Sprite->SetSprite(BeamSprite);
-	SetThickness(WarningThickness, WarningTint);
+	Draw(0.0, WarningThickness, WarningTint);
+
+	if (Settings.ChargeSound)
+	{
+		UGameplayStatics::PlaySound2D(this, Settings.ChargeSound);
+	}
 }
 
 void AArenaBeam::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (!bActive && GetWorld()->GetTimeSeconds() >= ActiveAt)
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (!bActive && Now >= ActiveAt)
 	{
 		bActive = true;
-		SetThickness(Settings.Width, FLinearColor::White);
+		if (FireSound)
+		{
+			UGameplayStatics::PlaySound2D(this, FireSound);
+		}
 	}
+
+	// Each phase sweeps out from the Cleric: slow enough to read the direction,
+	// fast enough that standing far away doesn't buy real time.
+	const double PhaseStart = bActive ? ActiveAt : FiredAt;
+	const double GrowSeconds = bActive ? ActiveGrowSeconds : WarningGrowSeconds;
+	Length = BeamLength * FMath::Clamp((Now - PhaseStart) / GrowSeconds, 0.0, 1.0);
+	Draw(Length, bActive ? Settings.Width : WarningThickness, bActive ? FLinearColor::White : WarningTint);
 
 	AArenaPlayerPawn* Player = Cast<AArenaPlayerPawn>(UGameplayStatics::GetPlayerPawn(this, 0));
 	if (bActive && !bHitPlayer && Player && IsTouchingPlayer(Player->GetRadius(), Player->GetActorLocation()))
@@ -57,9 +74,11 @@ void AArenaBeam::Tick(float DeltaTime)
 	}
 }
 
-void AArenaBeam::SetThickness(float Thickness, const FLinearColor& Tint)
+void AArenaBeam::Draw(double InLength, float Thickness, const FLinearColor& Tint)
 {
-	Sprite->SetRelativeScale3D(FVector(BeamLength / SpritePixels, 1.f, Thickness / SpritePixels));
+	// The sprite is centred, so sit halfway along the drawn part.
+	SetActorLocation(Start + Direction * (InLength * 0.5));
+	Sprite->SetRelativeScale3D(FVector(FMath::Max(InLength, 1.0) / SpritePixels, 1.f, Thickness / SpritePixels));
 	Sprite->SetSpriteColor(Tint);
 }
 
@@ -69,5 +88,5 @@ bool AArenaBeam::IsTouchingPlayer(float PlayerRadius, const FVector& PlayerLocat
 	ToPlayer.Y = 0.0;
 	const double Along = FVector::DotProduct(ToPlayer, Direction);
 	const double Across = (ToPlayer - Direction * Along).Size();
-	return Along >= 0.0 && Across <= Settings.Width * 0.5 + PlayerRadius;
+	return Along >= 0.0 && Along <= Length && Across <= Settings.Width * 0.5 + PlayerRadius;
 }

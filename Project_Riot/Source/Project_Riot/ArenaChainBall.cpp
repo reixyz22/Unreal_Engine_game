@@ -5,6 +5,7 @@
 #include "ArenaPlayerPawn.h"
 #include "DrawDebugHelpers.h"
 #include "EngineUtils.h"
+#include "Kismet/GameplayStatics.h"
 #include "PaperSpriteComponent.h"
 
 namespace
@@ -24,12 +25,12 @@ AArenaChainBall::AArenaChainBall()
 	SetRootComponent(Sprite);
 }
 
-void AArenaChainBall::Throw(AArenaPlayerPawn* InThrower, AArenaEnemy* InTarget, UPaperSprite* InSprite, const FLinearColor& Tint, float InSpeed, float InDamage)
+void AArenaChainBall::Throw(AArenaPlayerPawn* InThrower, AArenaEnemy* InTarget, UPaperSprite* InSprite, float InSpeed, float InDamage, USoundBase* InHitSound)
 {
 	Thrower = InThrower;
 	Target = InTarget;
+	HitSound = InHitSound;
 	Sprite->SetSprite(InSprite);
-	Sprite->SetSpriteColor(Tint);
 	Speed = InSpeed;
 	Damage = InDamage;
 }
@@ -113,4 +114,8 @@ void AArenaChainBall::HitEnemy(AArenaEnemy* Enemy)
 
 	Enemy->ReceiveDamage(Damage);
 	HitThisThrow.Add(Enemy);
+	if (HitSound)
+	{
+		UGameplayStatics::PlaySound2D(this, HitSound);
+	}
 }

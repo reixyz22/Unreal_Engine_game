@@ -8,6 +8,7 @@ class AArenaEnemy;
 class AArenaPlayerPawn;
 class UPaperSprite;
 class UPaperSpriteComponent;
+class USoundBase;
 
 UENUM()
 enum class EChainState : uint8
@@ -26,7 +27,7 @@ public:
 
 	virtual void Tick(float DeltaTime) override;
 
-	void Throw(AArenaPlayerPawn* InThrower, AArenaEnemy* InTarget, UPaperSprite* InSprite, const FLinearColor& Tint, float InSpeed, float InDamage);
+	void Throw(AArenaPlayerPawn* InThrower, AArenaEnemy* InTarget, UPaperSprite* InSprite, float InSpeed, float InDamage, USoundBase* InHitSound);
 
 private:
 	bool MoveToward(const FVector& Goal, float DeltaTime);
@@ -35,6 +36,9 @@ private:
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UPaperSpriteComponent> Sprite;
+
+	UPROPERTY()
+	TObjectPtr<USoundBase> HitSound;
 
 	TWeakObjectPtr<AArenaPlayerPawn> Thrower;
 	TWeakObjectPtr<AArenaEnemy> Target;

@@ -15,6 +15,7 @@
 #include "GameFramework/PlayerController.h"
 #include "HealthComponent.h"
 #include "InputActionValue.h"
+#include "Kismet/GameplayStatics.h"
 #include "PaperFlipbook.h"
 #include "PaperFlipbookComponent.h"
 #include "PaperSpriteComponent.h"
@@ -31,7 +32,6 @@ namespace
 	// The guitar rides on her back, and swings to her front while she strums.
 	const FVector GuitarOnBack(-3.f, -0.5f, -1.f);
 	const FVector GuitarInFront(3.f, 0.5f, -3.f);
-	constexpr float StrumSeconds = 0.45f;
 
 	// One grade over every art pack so they read as one game (DECISIONS.md 008).
 	void ApplyArenaLook(FPostProcessSettings& Post)
@@ -175,7 +175,7 @@ void AArenaPlayerPawn::Tick(float DeltaTime)
 
 	UpdateHover();
 	const APlayerController* PlayerController = Cast<APlayerController>(GetController());
-	if (PlayerController && !IsStunned())
+	if (PlayerController && !IsRooted())
 	{
 		if (PlayerController->WasInputKeyJustPressed(EKeys::RightMouseButton))
 		{
@@ -186,6 +186,7 @@ void AArenaPlayerPawn::Tick(float DeltaTime)
 			CastSpecial();
 		}
 	}
+	UpdateSpecial();
 	UpdateMovement(DeltaTime);
 	UpdateGuitar();
 	UpdateBlink();
@@ -224,7 +225,7 @@ void AArenaPlayerPawn::HandleRightClick()
 	if (!Enemy)
 	{
 		FVector Cursor;
-		if (GetCursorWorldLocation(Cursor))
+		if (bClickToMove && GetCursorWorldLocation(Cursor))
 		{
 			MoveTarget = Cursor;
 		}
@@ -239,6 +240,10 @@ void AArenaPlayerPawn::HandleRightClick()
 		ThrowChainAt(Enemy);
 		return;
 	}
+	if (!bClickToMove)
+	{
+		return;
+	}
 
 	// Out of range: walk to where it was in range, then fire (DECISIONS.md 006).
 	MoveTarget = GetActorLocation() + ToEnemy.GetSafeNormal() * (Gap + ArriveDistance);
@@ -247,7 +252,7 @@ void AArenaPlayerPawn::HandleRightClick()
 
 void AArenaPlayerPawn::UpdateMovement(float DeltaTime)
 {
-	const FVector2D Direction = IsStunned() ? FVector2D::ZeroVector : ComputeMoveDirection();
+	const FVector2D Direction = IsRooted() ? FVector2D::ZeroVector : ComputeMoveDirection();
 
 	FVector Location = GetActorLocation();
 	Location.X += Direction.X * MoveSpeed * DeltaTime;
@@ -299,9 +304,13 @@ void AArenaPlayerPawn::ThrowChainAt(AArenaEnemy* Target)
 
 	if (AArenaChainBall* Ball = GetWorld()->SpawnActor<AArenaChainBall>(SpawnAt, FRotator::ZeroRotator))
 	{
-		Ball->Throw(this, Target, ChainBallSprite, FLinearColor::White, ChainSpeed, AutoDamage);
+		Ball->Throw(this, Target, ChainBallSprite, ChainSpeed, AutoDamage, ChainHitSound);
 		bChainOut = true;
 		PlayStrike();
+		if (ThrowSound)
+		{
+			UGameplayStatics::PlaySound2D(this, ThrowSound);
+		}
 	}
 }
 
@@ -337,11 +346,31 @@ void AArenaPlayerPawn::CastSpecial()
 		return;
 	}
 
+	// Root her for the strum: guitar to the front, burst after the wind-up.
+	const double Now = GetWorld()->GetTimeSeconds();
+	Mana -= SpecialManaCost;
+	BurstAt = Now + SpecialWindUp;
+	StrumEndsAt = BurstAt + SpecialWindDown;
+	bBurstPending = true;
+	MoveTarget.Reset();
+	BufferedAuto.Reset();
+	if (StrumSound)
+	{
+		UGameplayStatics::PlaySound2D(this, StrumSound);
+	}
+}
+
+void AArenaPlayerPawn::UpdateSpecial()
+{
+	if (!bBurstPending || GetWorld()->GetTimeSeconds() < BurstAt)
+	{
+		return;
+	}
+
+	bBurstPending = false;
 	if (AArenaShockwave* Shock = GetWorld()->SpawnActor<AArenaShockwave>(GetActorLocation(), FRotator::ZeroRotator))
 	{
 		Shock->Launch(ShockBurstSprite, SpecialDamage, SpecialRadius, SpecialSeconds);
-		Mana -= SpecialManaCost;
-		StrumEndsAt = GetWorld()->GetTimeSeconds() + StrumSeconds;
 	}
 }
 
@@ -368,6 +397,30 @@ bool AArenaPlayerPawn::ReceiveStunHit(float Amount, float StunSeconds)
 bool AArenaPlayerPawn::IsStunned() const
 {
 	return GetWorld()->GetTimeSeconds() < StunnedUntil;
+}
+
+void AArenaPlayerPawn::SetClickToMove(bool bEnabled)
+{
+	bClickToMove = bEnabled;
+	MoveTarget.Reset();
+	BufferedAuto.Reset();
+}
+
+void AArenaPlayerPawn::SetFogEnabled(bool bEnabled)
+{
+	bFogEnabled = bEnabled;
+	for (FWeightedBlendable& Blendable : Camera->PostProcessSettings.WeightedBlendables.Array)
+	{
+		if (Blendable.Object == FogMaterial)
+		{
+			Blendable.Weight = bEnabled ? 1.f : 0.f;
+		}
+	}
+}
+
+bool AArenaPlayerPawn::IsRooted() const
+{
+	return IsStunned() || GetWorld()->GetTimeSeconds() < StrumEndsAt;
 }
 
 void AArenaPlayerPawn::Heal(float Amount)

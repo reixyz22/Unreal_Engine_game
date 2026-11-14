@@ -45,7 +45,7 @@ void APyroEnemy::Tick(float DeltaTime)
 	}
 	Desired += ComputeSeparation() * SpreadStrength;
 
-	AddActorWorldOffset(Desired.GetClampedToMaxSize(1.0) * MoveSpeed * DeltaTime);
+	MoveWithinArena(Desired.GetClampedToMaxSize(1.0) * MoveSpeed * DeltaTime);
 	FaceToward(TowardPlayer.X);
 }
 

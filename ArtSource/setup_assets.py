@@ -213,6 +213,23 @@ def import_frames():
         EAL.save_loaded_asset(sprite, False)
 
 
+def import_sounds():
+    """Import the WAVs from build_sounds.py into /Game/Audio and return them by name."""
+    folder = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir() + "../ArtSource/Sounds/")
+    names = ["SFX_ChainThrow", "SFX_ChainHit", "SFX_BeamCharge", "SFX_BeamFire", "SFX_Strum"]
+    tasks = []
+    for name in names:
+        task = unreal.AssetImportTask()
+        task.filename = folder + name + ".wav"
+        task.destination_path = "/Game/Audio"
+        task.replace_existing = True
+        task.automated = True
+        task.save = True
+        tasks.append(task)
+    TOOLS.import_asset_tasks(tasks)
+    return {name: unreal.load_asset(f"/Game/Audio/{name}") for name in names}
+
+
 def flipbook(name, sprite_names, fps):
     path = f"{ART}/{name}"
     book = unreal.load_asset(path) if EAL.does_asset_exist(path) else         TOOLS.create_asset(name, ART, unreal.PaperFlipbook, unreal.PaperFlipbookFactory())
@@ -257,6 +274,7 @@ def main():
     reimport_floor()
     fit_floor_sprite()
     import_frames()
+    sounds = import_sounds()
     cleric_run = flipbook("FB_ClericRun", [f"Cleric_Run_{i}_Sprite" for i in range(4)], 8.0)
     sprite_material = build_sprite_material()
     bright = build_bright_instance(sprite_material)
@@ -270,13 +288,19 @@ def main():
     set_defaults(cleric, body_anim=cleric_run,
                  beam_sprite=unreal.load_asset(f"{ART}/Cleric_Beam_Sprite"),
                  mana_shard_sprite=unreal.load_asset(f"{ART}/Shard_Mana_Sprite"),
-                 health_shard_sprite=unreal.load_asset(f"{ART}/Shard_Health_Sprite"))
+                 health_shard_sprite=unreal.load_asset(f"{ART}/Shard_Health_Sprite"),
+                 beam_charge_sound=sounds["SFX_BeamCharge"], beam_fire_sound=sounds["SFX_BeamFire"])
+    hud = blueprint("BP_ArenaHUD", unreal.ArenaHUD)
+    set_defaults(hud)
     # Pyros fill every wave; Clerics join from wave 3 at a fifth of the wave.
     set_defaults(unreal.load_asset(f"{CORE}/BP_ArenaGameMode"),
-                 spawn_rules=[spawn_rule(pyro, 1, 4.0), spawn_rule(cleric, 3, 1.0)])
+                 spawn_rules=[spawn_rule(pyro, 1, 4.0), spawn_rule(cleric, 3, 1.0)],
+                 hud_class=hud.generated_class())
     set_defaults(unreal.load_asset(f"{CORE}/BP_ArenaPlayerPawn"), fog_material=fog,
                  guitar_sprite=unreal.load_asset(f"{ART}/Nikki_Guitar_Sprite"),
-                 shock_burst_sprite=unreal.load_asset(f"{ART}/Shock_Burst_Sprite"))
+                 shock_burst_sprite=unreal.load_asset(f"{ART}/Shock_Burst_Sprite"),
+                 throw_sound=sounds["SFX_ChainThrow"], chain_hit_sound=sounds["SFX_ChainHit"],
+                 strum_sound=sounds["SFX_Strum"])
     unreal.log("setup_assets: done")
 
 

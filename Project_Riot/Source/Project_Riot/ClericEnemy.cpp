@@ -46,7 +46,7 @@ void AClericEnemy::Tick(float DeltaTime)
 	}
 	const double Distance = ToPlayer.Size();
 	const double Step = FMath::Clamp(Distance - PreferredRange, -1.0, 1.0);
-	AddActorWorldOffset(ToPlayer.GetSafeNormal() * Step * MoveSpeed * DeltaTime);
+	MoveWithinArena(ToPlayer.GetSafeNormal() * Step * MoveSpeed * DeltaTime);
 }
 
 void AClericEnemy::CastBeam()
@@ -63,6 +63,8 @@ void AClericEnemy::CastBeam()
 	Settings.Width = BeamWidth;
 	Settings.Damage = BeamDamage;
 	Settings.StunSeconds = StunSeconds;
+	Settings.ChargeSound = BeamChargeSound;
+	Settings.FireSound = BeamFireSound;
 
 	if (AArenaBeam* Beam = GetWorld()->SpawnActor<AArenaBeam>(GetActorLocation(), FRotator::ZeroRotator))
 	{

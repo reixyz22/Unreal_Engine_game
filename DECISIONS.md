@@ -90,6 +90,7 @@ The calls I made on this project, newest at the bottom. Each entry gives what I 
 - Right-clicking an enemy throws the auto attack.
 - If the enemy is out of range, Nikki walks into range and the auto fires on arrival. The walk point is fixed at click time, even if the enemy moves. That keeps the code simple, and the input buffer feels generous.
 - Right-clicking the ground walks there. WASD cancels both.
+- **Revised after playtesting:** WASD felt much better, so click-to-move is off by default. Right-clicking an enemy in range still attacks. Click-to-move can be turned back on from the pause menu.
 - Hovering an enemy outlines it in red and turns the cursor into a sword, so it's always clear when a click means attack.
 
 ---

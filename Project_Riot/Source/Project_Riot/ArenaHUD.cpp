@@ -7,15 +7,27 @@
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
 #include "EngineUtils.h"
+#include "GameFramework/PlayerController.h"
 #include "HealthComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "PaperFlipbookComponent.h"
 #include "PaperSprite.h"
 
 namespace
 {
-	const FLinearColor HealthRed(0.95f, 0.12f, 0.18f);
+	const FLinearColor HealthTop(0.93f, 0.26f, 0.22f);
+	const FLinearColor HealthBottom(0.62f, 0.07f, 0.09f);
+	const FLinearColor HealthChip(1.f, 0.86f, 0.55f);
+	const FLinearColor Notch(0.f, 0.f, 0.f, 0.55f);
 	const FLinearColor ManaBlue(0.25f, 0.55f, 1.f);
 	const FLinearColor BarBacking(0.03f, 0.02f, 0.05f, 0.85f);
+	const FLinearColor Wood(0.2f, 0.11f, 0.05f, 0.96f);
+	const FLinearColor WoodEdge(0.55f, 0.34f, 0.15f);
+	const FLinearColor Parchment(0.86f, 0.74f, 0.52f);
+	const FLinearColor ParchmentLit(0.98f, 0.88f, 0.64f);
+	const FLinearColor Ink(0.24f, 0.13f, 0.05f);
+	constexpr float HealthPerNotch = 10.f;
 	const FLinearColor WaveYellow(1.f, 0.85f, 0.2f);
 	constexpr float OverheadBarWidth = 56.f;
 	constexpr float HeroOverheadBarWidth = 80.f;
@@ -23,6 +35,36 @@ namespace
 	constexpr float BannerTop = 18.f;
 	constexpr float BannerScale = 1.6f;
 	constexpr float IconSize = 40.f;
+}
+
+AArenaHUD::AArenaHUD()
+{
+	PrimaryActorTick.bCanEverTick = true;
+	// The HUD keeps ticking while paused so it can run the pause menu.
+	SetTickableWhenPaused(true);
+}
+
+void AArenaHUD::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (!PlayerOwner)
+	{
+		return;
+	}
+
+	// Escape in a packaged game; P too, because Escape stops Play-In-Editor.
+	if (PlayerOwner->WasInputKeyJustPressed(EKeys::Escape) || PlayerOwner->WasInputKeyJustPressed(EKeys::P))
+	{
+		SetMenuOpen(!bMenuOpen);
+	}
+	else if (bMenuOpen && PlayerOwner->WasInputKeyJustPressed(EKeys::LeftMouseButton))
+	{
+		FVector2D Mouse;
+		if (PlayerOwner->GetMousePosition(Mouse.X, Mouse.Y))
+		{
+			ClickMenu(Mouse);
+		}
+	}
 }
 
 void AArenaHUD::DrawHUD()
@@ -43,10 +85,22 @@ void AArenaHUD::DrawHUD()
 		DrawSpecialSlot(*Hero);
 		DrawStunStars(*Hero);
 	}
+	if (bMenuOpen)
+	{
+		DrawPauseMenu();
+	}
 }
 
 void AArenaHUD::DrawHealthBars()
 {
+	for (auto It = Bars.CreateIterator(); It; ++It)
+	{
+		if (!It.Key().IsValid())
+		{
+			It.RemoveCurrent();
+		}
+	}
+
 	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
 	{
 		const UHealthComponent* Health = It->FindComponentByClass<UHealthComponent>();
@@ -59,8 +113,7 @@ void AArenaHUD::DrawHealthBars()
 		const FVector Top = Body->Bounds.Origin + FVector(0.0, 0.0, Body->Bounds.BoxExtent.Z + 6.0);
 		const FVector Screen = Project(Top);
 		const float Width = It->IsA<APawn>() ? HeroOverheadBarWidth : OverheadBarWidth;
-		DrawBar(Screen.X - Width * 0.5f, Screen.Y - OverheadBarHeight, Width, OverheadBarHeight,
-			Health->GetHealth() / Health->GetMaxHealth(), HealthRed);
+		DrawHealthBar(*Health, Screen.X - Width * 0.5f, Screen.Y - OverheadBarHeight, Width, OverheadBarHeight);
 	}
 }
 
@@ -125,7 +178,7 @@ void AArenaHUD::DrawHeroPanel(const AArenaPlayerPawn& Hero)
 	const float Y = Canvas->ClipY - 56.f;
 
 	const UHealthComponent& Health = Hero.GetHealth();
-	DrawBar(X, Y, Width, 18.f, Health.GetHealth() / Health.GetMaxHealth(), HealthRed);
+	DrawHealthBar(Health, X, Y, Width, 18.f);
 	DrawCentered(FString::Printf(TEXT("%.0f / %.0f"), Health.GetHealth(), Health.GetMaxHealth()),
 		Canvas->ClipX * 0.5f, Y + 2.f, FLinearColor::White, 1.f, GEngine->GetSmallFont());
 }
@@ -187,10 +240,117 @@ void AArenaHUD::DrawDeathBanner(const AArenaGameMode& GameMode)
 		Canvas->ClipX * 0.5f, Canvas->ClipY * 0.45f, WaveYellow, 2.f);
 }
 
-void AArenaHUD::DrawBar(float X, float Y, float Width, float Height, float Fraction, const FLinearColor& Fill)
+void AArenaHUD::DrawHealthBar(const UHealthComponent& Health, float X, float Y, float Width, float Height)
 {
+	// Smooth: the fill eases to the real value, and a pale chip shows what was just lost.
+	FBarState& State = Bars.FindOrAdd(&Health);
+	const float Actual = Health.GetHealth() / Health.GetMaxHealth();
+	const float DeltaSeconds = GetWorld()->GetDeltaSeconds();
+	State.Shown = State.Shown < 0.f ? Actual : FMath::FInterpTo(State.Shown, Actual, DeltaSeconds, 14.f);
+	State.Trail = State.Trail < State.Shown ? State.Shown : FMath::FInterpTo(State.Trail, State.Shown, DeltaSeconds, 2.5f);
+
 	DrawRect(BarBacking, X - 2.f, Y - 2.f, Width + 4.f, Height + 4.f);
-	DrawRect(Fill, X, Y, Width * FMath::Clamp(Fraction, 0.f, 1.f), Height);
+	DrawRect(HealthChip, X, Y, Width * State.Trail, Height);
+	const float Fill = Width * State.Shown;
+	DrawRect(HealthBottom, X, Y, Fill, Height);
+	DrawRect(HealthTop, X, Y, Fill, FMath::Max(1.f, Height * 0.4f));
+
+	// League-style notches: a short tick every 10 health, a full-height one every 50.
+	for (float Mark = HealthPerNotch; Mark < Health.GetMaxHealth(); Mark += HealthPerNotch)
+	{
+		const bool bMajor = FMath::IsNearlyZero(FMath::Fmod(Mark, HealthPerNotch * 5.f));
+		DrawRect(Notch, X + Width * Mark / Health.GetMaxHealth(), Y, 1.f, bMajor ? Height : Height * 0.55f);
+	}
+}
+
+void AArenaHUD::DrawBox(float X, float Y, float Width, float Height, const FLinearColor& Fill, const FLinearColor& Border, float BorderWidth)
+{
+	DrawRect(Border, X, Y, Width, Height);
+	DrawRect(Fill, X + BorderWidth, Y + BorderWidth, Width - BorderWidth * 2.f, Height - BorderWidth * 2.f);
+}
+
+void AArenaHUD::SetMenuOpen(bool bOpen)
+{
+	bMenuOpen = bOpen;
+	UGameplayStatics::SetGamePaused(this, bOpen);
+}
+
+void AArenaHUD::BuildMenuButtons(AArenaPlayerPawn& Hero)
+{
+	MenuButtons.Reset();
+	MenuButtons.Add({ TEXT("Resume"), FBox2D(), [this]() { SetMenuOpen(false); } });
+	MenuButtons.Add({ FString::Printf(TEXT("Click to move: %s"), Hero.IsClickToMove() ? TEXT("On") : TEXT("Off")),
+		FBox2D(), [&Hero]() { Hero.SetClickToMove(!Hero.IsClickToMove()); } });
+	MenuButtons.Add({ FString::Printf(TEXT("Fog: %s"), Hero.IsFogEnabled() ? TEXT("On") : TEXT("Off")),
+		FBox2D(), [&Hero]() { Hero.SetFogEnabled(!Hero.IsFogEnabled()); } });
+	MenuButtons.Add({ TEXT("Quit"), FBox2D(), [this]() { UKismetSystemLibrary::QuitGame(this, PlayerOwner, EQuitPreference::Quit, false); } });
+}
+
+void AArenaHUD::DrawPauseMenu()
+{
+	AArenaPlayerPawn* Hero = Cast<AArenaPlayerPawn>(GetOwningPawn());
+	if (!Hero)
+	{
+		return;
+	}
+	BuildMenuButtons(*Hero);
+
+	UFont* Font = MenuFont ? MenuFont.Get() : GEngine->GetLargeFont();
+	constexpr float ButtonWidth = 360.f;
+	constexpr float ButtonHeight = 56.f;
+	constexpr float Gap = 14.f;
+	constexpr float TitleSpace = 110.f;
+	const float PanelWidth = ButtonWidth + 80.f;
+	const float PanelHeight = TitleSpace + MenuButtons.Num() * (ButtonHeight + Gap) + 20.f;
+	const float PanelX = (Canvas->ClipX - PanelWidth) * 0.5f;
+	const float PanelY = (Canvas->ClipY - PanelHeight) * 0.5f;
+
+	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.55f), 0.f, 0.f, Canvas->ClipX, Canvas->ClipY);
+	if (PanelTexture)
+	{
+		DrawTexture(PanelTexture, PanelX, PanelY, PanelWidth, PanelHeight, 0.f, 0.f, 1.f, 1.f, FLinearColor::White, BLEND_Translucent);
+	}
+	else
+	{
+		DrawBox(PanelX, PanelY, PanelWidth, PanelHeight, Wood, WoodEdge, 5.f);
+		DrawRect(WoodEdge * 0.6f, PanelX + 14.f, PanelY + 82.f, PanelWidth - 28.f, 2.f);
+	}
+	DrawCentered(TEXT("PAUSED"), Canvas->ClipX * 0.5f, PanelY + 22.f, Parchment, 2.f, Font);
+
+	FVector2D Mouse = FVector2D::ZeroVector;
+	PlayerOwner->GetMousePosition(Mouse.X, Mouse.Y);
+	const float X = (Canvas->ClipX - ButtonWidth) * 0.5f;
+	float Y = PanelY + TitleSpace;
+	for (FMenuButton& Button : MenuButtons)
+	{
+		Button.Rect = FBox2D(FVector2D(X, Y), FVector2D(X + ButtonWidth, Y + ButtonHeight));
+		const bool bHovered = Button.Rect.IsInside(Mouse);
+		if (ButtonTexture)
+		{
+			DrawTexture(ButtonTexture, X, Y, ButtonWidth, ButtonHeight, 0.f, 0.f, 1.f, 1.f,
+				bHovered ? FLinearColor(1.15f, 1.1f, 1.f) : FLinearColor::White, BLEND_Translucent);
+		}
+		else
+		{
+			DrawBox(X, Y, ButtonWidth, ButtonHeight, bHovered ? ParchmentLit : Parchment, Ink, 3.f);
+		}
+		float TextWidth, TextHeight;
+		GetTextSize(Button.Label, TextWidth, TextHeight, Font, 1.3f);
+		DrawText(Button.Label, Ink, X + (ButtonWidth - TextWidth) * 0.5f, Y + (ButtonHeight - TextHeight) * 0.5f, Font, 1.3f);
+		Y += ButtonHeight + Gap;
+	}
+}
+
+void AArenaHUD::ClickMenu(const FVector2D& Mouse)
+{
+	for (const FMenuButton& Button : MenuButtons)
+	{
+		if (Button.Rect.IsInside(Mouse))
+		{
+			Button.Action();
+			return;
+		}
+	}
 }
 
 void AArenaHUD::DrawCentered(const FString& Text, float CenterX, float Y, const FLinearColor& Color, float Scale, UFont* Font)

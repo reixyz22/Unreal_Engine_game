@@ -15,5 +15,8 @@ Red spiked flail from **[CC0 Flail Icons](https://opengameart.org/content/cc0-fl
 ## Nikki's guitar
 Hand-painted by me (`Nikki/guitar_painted.png`). `build_art.py` keys out the paper, shrinks it to sprite size and outlines it.
 
+## Sound effects
+Synthesized from scratch by `build_sounds.py` (no samples): the chain whoosh and hit, the Cleric beam charge and zap, and a plucked-string guitar strum.
+
 ## Placeholders
 `T_Player.png`, the Pyro bead, the Cleric beam, the shock burst and the mana/health shards are simple placeholder shapes drawn by script for this project, not taken from any pack.

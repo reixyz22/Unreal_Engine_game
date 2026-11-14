@@ -34,6 +34,8 @@ protected:
 
 	APawn* GetPlayer() const;
 	void FaceToward(double DirectionX);
+	// Every enemy moves through this, so none can leave the arena.
+	void MoveWithinArena(const FVector& Offset);
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<USphereComponent> Collision;

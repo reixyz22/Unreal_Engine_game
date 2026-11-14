@@ -14,6 +14,7 @@ class UPaperFlipbook;
 class UPaperFlipbookComponent;
 class UPaperSprite;
 class UPaperSpriteComponent;
+class USoundBase;
 class USphereComponent;
 struct FInputActionValue;
 
@@ -43,6 +44,12 @@ public:
 	int32 GetMaxMana() const { return MaxMana; }
 	bool IsManaFull() const { return Mana >= MaxMana; }
 	bool IsStunned() const;
+	bool IsRooted() const;
+
+	bool IsClickToMove() const { return bClickToMove; }
+	void SetClickToMove(bool bEnabled);
+	bool IsFogEnabled() const { return bFogEnabled; }
+	void SetFogEnabled(bool bEnabled);
 	UPaperSprite* GetSpecialIcon() const { return GuitarSprite; }
 	int32 GetSpecialCost() const { return SpecialManaCost; }
 
@@ -63,6 +70,7 @@ private:
 	void UpdateBlink();
 	void UpdateGuitar();
 	void CastSpecial();
+	void UpdateSpecial();
 	void PlayStrike();
 	void Die();
 
@@ -92,6 +100,10 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "Movement")
 	float MoveSpeed = 400.f;
+
+	// Off by default: WASD plays better. Right-click still attacks; with this on it also walks.
+	UPROPERTY(EditAnywhere, Category = "Movement")
+	bool bClickToMove = false;
 
 	UPROPERTY(EditAnywhere, Category = "Camera")
 	float CameraViewWidth = 1280.f;
@@ -157,9 +169,28 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Special")
 	float SpecialSeconds = 0.5f;
 
+	// She stands still and strums for this long before the burst, and this long after.
+	UPROPERTY(EditAnywhere, Category = "Special")
+	float SpecialWindUp = 0.3f;
+
+	UPROPERTY(EditAnywhere, Category = "Special")
+	float SpecialWindDown = 0.25f;
+
+	UPROPERTY(EditAnywhere, Category = "Sound")
+	TObjectPtr<USoundBase> ThrowSound;
+
+	UPROPERTY(EditAnywhere, Category = "Sound")
+	TObjectPtr<USoundBase> ChainHitSound;
+
+	UPROPERTY(EditAnywhere, Category = "Sound")
+	TObjectPtr<USoundBase> StrumSound;
+
 	int32 Mana = 0;
+	bool bFogEnabled = true;
 	double StunnedUntil = 0.0;
 	double StrumEndsAt = 0.0;
+	double BurstAt = 0.0;
+	bool bBurstPending = false;
 	FVector2D MoveInput = FVector2D::ZeroVector;
 	TOptional<FVector> MoveTarget;
 	TWeakObjectPtr<AArenaEnemy> HoveredEnemy;

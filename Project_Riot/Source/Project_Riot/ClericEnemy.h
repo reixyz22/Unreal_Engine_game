@@ -5,6 +5,7 @@
 #include "ClericEnemy.generated.h"
 
 class UPaperSprite;
+class USoundBase;
 
 // Slow caster: keeps its distance and fires an arena-wide stun beam at the player.
 // Always drops a shard: mana, or health if the player's mana is already full.
@@ -33,6 +34,12 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Cleric")
 	TObjectPtr<UPaperSprite> HealthShardSprite;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Cleric")
+	TObjectPtr<USoundBase> BeamChargeSound;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Cleric")
+	TObjectPtr<USoundBase> BeamFireSound;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Cleric")
 	float PreferredRange = 600.f;
