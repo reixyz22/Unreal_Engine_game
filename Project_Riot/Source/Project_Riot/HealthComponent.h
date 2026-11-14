@@ -14,6 +14,7 @@ class PROJECT_RIOT_API UHealthComponent : public UActorComponent
 public:
 	bool ApplyDamage(float Amount);
 	void SetMaxHealth(float InMaxHealth) { MaxHealth = InMaxHealth; }
+	void Heal(float Amount) { if (!IsDead()) { CurrentHealth = FMath::Min(CurrentHealth + Amount, MaxHealth); } }
 
 	bool IsInvulnerable() const;
 	bool IsDead() const { return CurrentHealth <= 0.f; }

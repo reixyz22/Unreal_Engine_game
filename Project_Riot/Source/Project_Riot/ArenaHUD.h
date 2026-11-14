@@ -21,6 +21,8 @@ private:
 	void DrawHealthBars();
 	void DrawWaveBanner(const AArenaGameMode& GameMode);
 	void DrawHeroPanel(const AArenaPlayerPawn& Hero);
+	void DrawSpecialSlot(const AArenaPlayerPawn& Hero);
+	void DrawStunStars(const AArenaPlayerPawn& Hero);
 	void DrawDeathBanner(const AArenaGameMode& GameMode);
 	void DrawBar(float X, float Y, float Width, float Height, float Fraction, const FLinearColor& Fill);
 	void DrawCentered(const FString& Text, float CenterX, float Y, const FLinearColor& Color, float Scale, UFont* Font = nullptr);

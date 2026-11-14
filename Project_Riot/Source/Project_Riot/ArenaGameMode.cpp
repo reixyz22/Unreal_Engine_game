@@ -48,22 +48,36 @@ void AArenaGameMode::CheckWave()
 void AArenaGameMode::PlanWave()
 {
 	Wave.Reset();
-	if (EnemyTypes.IsEmpty())
+	if (SpawnRules.IsEmpty())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("BP_ArenaGameMode has no Enemy Types; waves will be empty."));
+		UE_LOG(LogTemp, Warning, TEXT("BP_ArenaGameMode has no Spawn Rules; waves will be empty."));
 		return;
 	}
 
+	const int32 NextRound = Round + 1;
 	const int32 WaveSize = FMath::Min(FirstWaveSize + ExtraEnemiesPerRound * Round, MaxWaveSize);
-	for (int32 Index = 0; Index < WaveSize; ++Index)
+
+	float TotalWeight = 0.f;
+	for (const FEnemySpawnRule& Rule : SpawnRules)
 	{
-		const TSubclassOf<AArenaEnemy> Type = EnemyTypes[FMath::RandRange(0, EnemyTypes.Num() - 1)];
-		FWaveGroup* Group = Wave.FindByPredicate([Type](const FWaveGroup& G) { return G.Type == Type; });
-		if (!Group)
+		TotalWeight += Rule.FirstRound <= NextRound ? Rule.Weight : 0.f;
+	}
+
+	// Every unlocked type after the first gets its share (at least one); the first fills the rest.
+	int32 Remaining = WaveSize;
+	for (int32 Index = 1; Index < SpawnRules.Num(); ++Index)
+	{
+		const FEnemySpawnRule& Rule = SpawnRules[Index];
+		if (Rule.FirstRound <= NextRound)
 		{
-			Group = &Wave.Add_GetRef(FWaveGroup{ Type });
+			const int32 Count = FMath::Max(1, FMath::FloorToInt32(WaveSize * Rule.Weight / TotalWeight));
+			Wave.Add(FWaveGroup{ Rule.Type, Count });
+			Remaining -= Count;
 		}
-		++Group->Count;
+	}
+	if (Remaining > 0)
+	{
+		Wave.Insert(FWaveGroup{ SpawnRules[0].Type, Remaining }, 0);
 	}
 }
 

@@ -40,6 +40,8 @@ void AArenaHUD::DrawHUD()
 	if (const AArenaPlayerPawn* Hero = Cast<AArenaPlayerPawn>(GetOwningPawn()))
 	{
 		DrawHeroPanel(*Hero);
+		DrawSpecialSlot(*Hero);
+		DrawStunStars(*Hero);
 	}
 }
 
@@ -117,7 +119,7 @@ void AArenaHUD::DrawWaveBanner(const AArenaGameMode& GameMode)
 
 void AArenaHUD::DrawHeroPanel(const AArenaPlayerPawn& Hero)
 {
-	// Bottom-center panel: health, then mana. Specials will sit in a row above it.
+	// Bottom-center panel: Nikki's health.
 	const float Width = FMath::Min(420.f, Canvas->ClipX * 0.4f);
 	const float X = (Canvas->ClipX - Width) * 0.5f;
 	const float Y = Canvas->ClipY - 56.f;
@@ -126,8 +128,52 @@ void AArenaHUD::DrawHeroPanel(const AArenaPlayerPawn& Hero)
 	DrawBar(X, Y, Width, 18.f, Health.GetHealth() / Health.GetMaxHealth(), HealthRed);
 	DrawCentered(FString::Printf(TEXT("%.0f / %.0f"), Health.GetHealth(), Health.GetMaxHealth()),
 		Canvas->ClipX * 0.5f, Y + 2.f, FLinearColor::White, 1.f, GEngine->GetSmallFont());
+}
 
-	DrawBar(X, Y + 24.f, Width, 10.f, Hero.GetManaFraction(), ManaBlue);
+void AArenaHUD::DrawSpecialSlot(const AArenaPlayerPawn& Hero)
+{
+	// Bottom-left: the Q ability icon, greyed out until there's mana, with one pip per mana point.
+	constexpr float Slot = 64.f;
+	constexpr float Pip = 12.f;
+	const float X = 24.f;
+	const float Y = Canvas->ClipY - 24.f - Pip - 8.f - Slot;
+	const bool bReady = Hero.GetMana() >= Hero.GetSpecialCost();
+
+	DrawRect(BarBacking, X - 3.f, Y - 3.f, Slot + 6.f, Slot + 6.f);
+	if (const UPaperSprite* Icon = Hero.GetSpecialIcon())
+	{
+		const FLinearColor Shade = bReady ? FLinearColor::White : FLinearColor(0.35f, 0.35f, 0.4f);
+		DrawTexture(Icon->GetBakedTexture(), X + 6.f, Y + 6.f, Slot - 12.f, Slot - 12.f, 0.f, 0.f, 1.f, 1.f, Shade, BLEND_Translucent);
+	}
+	DrawText(TEXT("Q"), WaveYellow, X + 4.f, Y + 2.f, GEngine->GetSmallFont(), 1.f);
+
+	for (int32 Index = 0; Index < Hero.GetMaxMana(); ++Index)
+	{
+		const float PipX = X + Index * (Pip + 6.f);
+		const float PipY = Y + Slot + 8.f;
+		DrawRect(ManaBlue, PipX, PipY, Pip, Pip);
+		if (Index >= Hero.GetMana())
+		{
+			DrawRect(BarBacking, PipX + 2.f, PipY + 2.f, Pip - 4.f, Pip - 4.f);
+		}
+	}
+}
+
+void AArenaHUD::DrawStunStars(const AArenaPlayerPawn& Hero)
+{
+	if (!Hero.IsStunned())
+	{
+		return;
+	}
+	const UPaperFlipbookComponent* Body = Hero.FindComponentByClass<UPaperFlipbookComponent>();
+	const FVector Top = Body->Bounds.Origin + FVector(0.0, 0.0, Body->Bounds.BoxExtent.Z + 30.0);
+	const FVector Screen = Project(Top);
+	const float Spin = GetWorld()->GetTimeSeconds() * 6.f;
+	for (int32 Star = 0; Star < 3; ++Star)
+	{
+		const float Angle = Spin + Star * UE_TWO_PI / 3.f;
+		DrawRect(WaveYellow, Screen.X + FMath::Cos(Angle) * 16.f - 3.f, Screen.Y + FMath::Sin(Angle) * 5.f - 3.f, 6.f, 6.f);
+	}
 }
 
 void AArenaHUD::DrawDeathBanner(const AArenaGameMode& GameMode)

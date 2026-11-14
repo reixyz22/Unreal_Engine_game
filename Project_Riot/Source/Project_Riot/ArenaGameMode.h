@@ -7,6 +7,22 @@
 class AArenaEnemy;
 class USoundBase;
 
+// One enemy type's place in the waves: from which round it appears, and its share of each wave.
+USTRUCT(BlueprintType)
+struct FEnemySpawnRule
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TSubclassOf<AArenaEnemy> Type;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 FirstRound = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float Weight = 1.f;
+};
+
 USTRUCT()
 struct FWaveGroup
 {
@@ -49,9 +65,9 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Audio")
 	TObjectPtr<USoundBase> Music;
 
-	// Each enemy in a wave is a random pick from this list.
+	// The first rule is the filler type: it gets whatever the other types' shares leave over.
 	UPROPERTY(EditDefaultsOnly, Category = "Waves")
-	TArray<TSubclassOf<AArenaEnemy>> EnemyTypes;
+	TArray<FEnemySpawnRule> SpawnRules;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Waves")
 	int32 FirstWaveSize = 3;

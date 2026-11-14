@@ -4,6 +4,7 @@
 #include "ArenaChainBall.h"
 #include "ArenaEnemy.h"
 #include "ArenaGameMode.h"
+#include "ArenaShockwave.h"
 #include "Camera/CameraComponent.h"
 #include "Components/SphereComponent.h"
 #include "Engine/GameViewportClient.h"
@@ -27,6 +28,10 @@ namespace
 	constexpr double ArriveDistance = 10.0;
 	// Where her hand sits in the strike frames, in sprite pixels from the centre.
 	const FVector HandOffset(6.f, 1.f, -4.f);
+	// The guitar rides on her back, and swings to her front while she strums.
+	const FVector GuitarOnBack(-3.f, -0.5f, -1.f);
+	const FVector GuitarInFront(3.f, 0.5f, -3.f);
+	constexpr float StrumSeconds = 0.45f;
 
 	// One grade over every art pack so they read as one game (DECISIONS.md 008).
 	void ApplyArenaLook(FPostProcessSettings& Post)
@@ -67,6 +72,11 @@ AArenaPlayerPawn::AArenaPlayerPawn()
 	HeldFlail->SetRelativeScale3D(FVector(ArenaArt::FlailScale));
 	HeldFlail->SetVisibility(false);
 
+	Guitar = CreateDefaultSubobject<UPaperSpriteComponent>(TEXT("Guitar"));
+	Guitar->SetupAttachment(Body);
+	Guitar->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Guitar->SetRelativeLocation(GuitarOnBack);
+
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(Collision);
 	Camera->SetRelativeLocation(FVector(0.f, CameraDistance, 0.f));
@@ -94,6 +104,7 @@ void AArenaPlayerPawn::BeginPlay()
 	Body->SetFlipbook(IdleAnim);
 	Body->SetSpriteColor(BodyTint);
 	HeldFlail->SetSprite(FlailHandleSprite);
+	Guitar->SetSprite(GuitarSprite);
 
 	Health->OnDepleted.AddUObject(this, &AArenaPlayerPawn::Die);
 }
@@ -164,11 +175,19 @@ void AArenaPlayerPawn::Tick(float DeltaTime)
 
 	UpdateHover();
 	const APlayerController* PlayerController = Cast<APlayerController>(GetController());
-	if (PlayerController && PlayerController->WasInputKeyJustPressed(EKeys::RightMouseButton))
+	if (PlayerController && !IsStunned())
 	{
-		HandleRightClick();
+		if (PlayerController->WasInputKeyJustPressed(EKeys::RightMouseButton))
+		{
+			HandleRightClick();
+		}
+		if (PlayerController->WasInputKeyJustPressed(EKeys::Q))
+		{
+			CastSpecial();
+		}
 	}
 	UpdateMovement(DeltaTime);
+	UpdateGuitar();
 	UpdateBlink();
 }
 
@@ -228,7 +247,7 @@ void AArenaPlayerPawn::HandleRightClick()
 
 void AArenaPlayerPawn::UpdateMovement(float DeltaTime)
 {
-	const FVector2D Direction = ComputeMoveDirection();
+	const FVector2D Direction = IsStunned() ? FVector2D::ZeroVector : ComputeMoveDirection();
 
 	FVector Location = GetActorLocation();
 	Location.X += Direction.X * MoveSpeed * DeltaTime;
@@ -309,6 +328,51 @@ AArenaEnemy* AArenaPlayerPawn::FindEnemyNear(const FVector& Point) const
 		}
 	}
 	return Best;
+}
+
+void AArenaPlayerPawn::CastSpecial()
+{
+	if (Mana < SpecialManaCost)
+	{
+		return;
+	}
+
+	if (AArenaShockwave* Shock = GetWorld()->SpawnActor<AArenaShockwave>(GetActorLocation(), FRotator::ZeroRotator))
+	{
+		Shock->Launch(ShockBurstSprite, SpecialDamage, SpecialRadius, SpecialSeconds);
+		Mana -= SpecialManaCost;
+		StrumEndsAt = GetWorld()->GetTimeSeconds() + StrumSeconds;
+	}
+}
+
+void AArenaPlayerPawn::UpdateGuitar()
+{
+	const double Now = GetWorld()->GetTimeSeconds();
+	const bool bStrumming = Now < StrumEndsAt;
+	Guitar->SetRelativeLocation(bStrumming ? GuitarInFront : GuitarOnBack);
+	Guitar->SetRelativeRotation(FRotator(bStrumming ? FMath::Sin(Now * 40.0) * 12.0 : 0.0, 0.0, 0.0));
+}
+
+bool AArenaPlayerPawn::ReceiveStunHit(float Amount, float StunSeconds)
+{
+	if (!Health->ApplyDamage(Amount))
+	{
+		return false;
+	}
+	StunnedUntil = GetWorld()->GetTimeSeconds() + StunSeconds;
+	MoveTarget.Reset();
+	BufferedAuto.Reset();
+	return true;
+}
+
+bool AArenaPlayerPawn::IsStunned() const
+{
+	return GetWorld()->GetTimeSeconds() < StunnedUntil;
+}
+
+void AArenaPlayerPawn::Heal(float Amount)
+{
+	Health->Heal(Amount);
 }
 
 void AArenaPlayerPawn::OnChainReturned()

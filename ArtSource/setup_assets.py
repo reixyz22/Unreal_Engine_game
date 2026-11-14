@@ -14,7 +14,10 @@ TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 
 # Not characters: no glow, no outline.
 PLAIN_SPRITES = {"T_ArenaFloor_Sprite", "T_Player_Sprite"}
-BRIGHT_SPRITES = {"Pyro_Bead_Sprite", "Flail_Ball_Sprite"}
+BRIGHT_SPRITES = {"Pyro_Bead_Sprite", "Flail_Ball_Sprite", "Cleric_Beam_Sprite", "Shock_Burst_Sprite",
+                  "Shard_Mana_Sprite", "Shard_Health_Sprite"}
+# Frames from build_art.py that get a texture and a sprite here.
+FRAMES = ["Nikki_Guitar", "Cleric_Beam", "Shock_Burst", "Shard_Mana", "Shard_Health"] + [f"Cleric_Run_{i}" for i in range(4)]
 
 SPRITE_HLSL = """
 float W, H;
@@ -181,6 +184,58 @@ def fit_floor_sprite():
     EAL.save_loaded_asset(sprite, False)
 
 
+def import_frames():
+    folder = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir() + "../ArtSource/Import/")
+    tasks = []
+    for name in FRAMES:
+        task = unreal.AssetImportTask()
+        task.filename = folder + name + ".png"
+        task.destination_path = ART
+        task.replace_existing = True
+        task.automated = True
+        task.save = False
+        tasks.append(task)
+    TOOLS.import_asset_tasks(tasks)
+
+    for name in FRAMES:
+        texture = unreal.load_asset(f"{ART}/{name}")
+        texture.set_editor_property("filter", unreal.TextureFilter.TF_NEAREST)
+        texture.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_EDITOR_ICON)
+        texture.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
+        texture.set_editor_property("lod_group", unreal.TextureGroup.TEXTUREGROUP_PIXELS2D)
+        EAL.save_loaded_asset(texture, False)
+
+        sprite_path = f"{ART}/{name}_Sprite"
+        sprite = unreal.load_asset(sprite_path) if EAL.does_asset_exist(sprite_path) else             TOOLS.create_asset(f"{name}_Sprite", ART, unreal.PaperSprite, unreal.PaperSpriteFactory())
+        sprite.set_editor_property("source_texture", texture)
+        sprite.set_editor_property("source_uv", unreal.Vector2D(0, 0))
+        sprite.set_editor_property("source_dimension", unreal.Vector2D(texture.blueprint_get_size_x(), texture.blueprint_get_size_y()))
+        EAL.save_loaded_asset(sprite, False)
+
+
+def flipbook(name, sprite_names, fps):
+    path = f"{ART}/{name}"
+    book = unreal.load_asset(path) if EAL.does_asset_exist(path) else         TOOLS.create_asset(name, ART, unreal.PaperFlipbook, unreal.PaperFlipbookFactory())
+    frames = []
+    for sprite_name in sprite_names:
+        frame = unreal.PaperFlipbookKeyFrame()
+        frame.set_editor_property("sprite", unreal.load_asset(f"{ART}/{sprite_name}"))
+        frame.set_editor_property("frame_run", 1)
+        frames.append(frame)
+    book.set_editor_property("frames_per_second", fps)
+    book.set_editor_property("key_frames", frames)
+    EAL.save_loaded_asset(book, False)
+    return book
+
+
+def spawn_rule(enemy_bp, first_round, weight):
+    rule = unreal.EnemySpawnRule()
+    rule.set_editor_property("type", enemy_bp.generated_class())
+    rule.set_editor_property("first_round", first_round)
+    rule.set_editor_property("weight", weight)
+    return rule
+
+
 def blueprint(name, parent_class):
     path = f"{CORE}/{name}"
     if EAL.does_asset_exist(path):
@@ -201,6 +256,8 @@ def set_defaults(bp, **values):
 def main():
     reimport_floor()
     fit_floor_sprite()
+    import_frames()
+    cleric_run = flipbook("FB_ClericRun", [f"Cleric_Run_{i}_Sprite" for i in range(4)], 8.0)
     sprite_material = build_sprite_material()
     bright = build_bright_instance(sprite_material)
     fog = build_fog_material()
@@ -209,8 +266,17 @@ def main():
     pyro = blueprint("BP_PyroEnemy", unreal.PyroEnemy)
     set_defaults(pyro, body_anim=unreal.load_asset(f"{ART}/FB_PyroRun"),
                  bead_sprite=unreal.load_asset(f"{ART}/Pyro_Bead_Sprite"))
-    set_defaults(unreal.load_asset(f"{CORE}/BP_ArenaGameMode"), enemy_types=[pyro.generated_class()])
-    set_defaults(unreal.load_asset(f"{CORE}/BP_ArenaPlayerPawn"), fog_material=fog)
+    cleric = blueprint("BP_ClericEnemy", unreal.ClericEnemy)
+    set_defaults(cleric, body_anim=cleric_run,
+                 beam_sprite=unreal.load_asset(f"{ART}/Cleric_Beam_Sprite"),
+                 mana_shard_sprite=unreal.load_asset(f"{ART}/Shard_Mana_Sprite"),
+                 health_shard_sprite=unreal.load_asset(f"{ART}/Shard_Health_Sprite"))
+    # Pyros fill every wave; Clerics join from wave 3 at a fifth of the wave.
+    set_defaults(unreal.load_asset(f"{CORE}/BP_ArenaGameMode"),
+                 spawn_rules=[spawn_rule(pyro, 1, 4.0), spawn_rule(cleric, 3, 1.0)])
+    set_defaults(unreal.load_asset(f"{CORE}/BP_ArenaPlayerPawn"), fog_material=fog,
+                 guitar_sprite=unreal.load_asset(f"{ART}/Nikki_Guitar_Sprite"),
+                 shock_burst_sprite=unreal.load_asset(f"{ART}/Shock_Burst_Sprite"))
     unreal.log("setup_assets: done")
 
 

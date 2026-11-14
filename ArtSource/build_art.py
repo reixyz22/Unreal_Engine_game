@@ -28,6 +28,7 @@ FLOOR_TONE = (0.62, 0.58, 0.74)
 
 # Hardware cursors per hero: Kenney's white-with-black-outline tiles, tinted and scaled up.
 CURSOR_SCALE = 2
+GUITAR_PIXELS = 15
 HERO_CURSORS = {"Nikki": (255, 105, 190)}
 CURSOR_TILES = {"Pointer": "tile_0048.png", "Sword": "tile_0106.png"}
 
@@ -144,6 +145,78 @@ def export_floor():
     floor.save(ROOT / "T_ArenaFloor.png")
 
 
+def outline(image, colour=OUTLINE):
+    """Add a 1px dark outline around opaque pixels, matching the pack art."""
+    padded = Image.new("RGBA", (image.width + 2, image.height + 2))
+    padded.alpha_composite(image, (1, 1))
+    result = padded.copy()
+    for y in range(padded.height):
+        for x in range(padded.width):
+            if padded.getpixel((x, y))[3]:
+                continue
+            near = [(x + dx, y + dy) for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))]
+            if any(0 <= nx < padded.width and 0 <= ny < padded.height and padded.getpixel((nx, ny))[3] for nx, ny in near):
+                result.putpixel((x, y), colour)
+    return result
+
+
+def export_cleric():
+    for index in range(4):
+        Image.open(PACK / f"angel_run_anim_f{index}.png").save(OUT / f"Cleric_Run_{index}.png")
+
+
+def export_guitar():
+    """William's painted guitar: key out the white paper, shrink to sprite size, outline it."""
+    painted = Image.open(ROOT / "Nikki" / "guitar_painted.png").convert("RGBA")
+    keyed = [(r, g, b, 0 if min(r, g, b) > 225 else 255) for r, g, b, _ in painted.getdata()]
+    painted.putdata(keyed)
+    painted = painted.crop(painted.getbbox())
+    small = painted.resize((GUITAR_PIXELS, round(painted.height * GUITAR_PIXELS / painted.width)), Image.BOX)
+    small.putdata([(r, g, b, 255 if a > 140 else 0) for r, g, b, a in small.getdata()])
+    outline(small).save(OUT / "Nikki_Guitar.png")
+
+
+def export_beam():
+    beam = Image.new("RGBA", (8, 8), (255, 255, 255, 255))
+    for x in range(8):
+        for y in (0, 7):
+            beam.putpixel((x, y), (255, 214, 120, 255))
+    beam.save(OUT / "Cleric_Beam.png")
+
+
+def export_shock_burst():
+    """Comic-book burst ring with music notes, drawn by script (placeholder art)."""
+    import math
+    size = 96
+    burst = Image.new("RGBA", (size, size))
+    draw = ImageDraw.Draw(burst)
+    centre = size / 2
+    points = []
+    for index in range(40):
+        radius = 46 if index % 2 == 0 else 39
+        angle = index * math.pi / 20
+        points.append((centre + radius * math.cos(angle), centre + radius * math.sin(angle)))
+    draw.polygon(points, outline=OUTLINE, width=5)
+    draw.polygon(points, outline=(255, 220, 90, 255), width=2)
+    for angle in (0.4, 2.0, 3.5, 5.1):
+        x, y = centre + 33 * math.cos(angle), centre + 33 * math.sin(angle)
+        draw.ellipse((x - 3, y + 1, x + 2, y + 5), fill=(255, 110, 200, 255), outline=OUTLINE)
+        draw.line((x + 2, y + 3, x + 2, y - 6), fill=OUTLINE, width=2)
+        draw.line((x + 2, y - 6, x + 5, y - 3), fill=OUTLINE, width=2)
+    burst.save(OUT / "Shock_Burst.png")
+
+
+def export_shards():
+    """Mana and health shards: small faceted crystals, drawn by script (placeholder art)."""
+    for name, light, dark in (("Mana", (120, 200, 255), (40, 90, 220)), ("Health", (255, 130, 140), (200, 30, 50))):
+        shard = Image.new("RGBA", (7, 11))
+        draw = ImageDraw.Draw(shard)
+        draw.polygon([(3, 0), (6, 4), (3, 10), (0, 4)], fill=(*dark, 255))
+        draw.polygon([(3, 0), (3, 10), (0, 4)], fill=(*light, 255))
+        shard.putpixel((2, 3), (255, 255, 255, 255))
+        outline(shard).save(OUT / f"Shard_{name}.png")
+
+
 def export_cursors():
     CURSOR_TARGET.mkdir(parents=True, exist_ok=True)
     for hero, colour in HERO_CURSORS.items():
@@ -163,6 +236,11 @@ def main():
     export_bead()
     export_floor()
     export_cursors()
+    export_cleric()
+    export_guitar()
+    export_beam()
+    export_shock_burst()
+    export_shards()
 
 
 if __name__ == "__main__":

@@ -34,8 +34,17 @@ public:
 	FVector GetHandLocation() const;
 	void OnChainReturned();
 
+	bool ReceiveStunHit(float Amount, float StunSeconds);
+	void Heal(float Amount);
+	void AddMana(int32 Amount) { Mana = FMath::Min(Mana + Amount, MaxMana); }
+
 	const UHealthComponent& GetHealth() const { return *Health; }
-	float GetManaFraction() const { return MaxMana > 0.f ? Mana / MaxMana : 0.f; }
+	int32 GetMana() const { return Mana; }
+	int32 GetMaxMana() const { return MaxMana; }
+	bool IsManaFull() const { return Mana >= MaxMana; }
+	bool IsStunned() const;
+	UPaperSprite* GetSpecialIcon() const { return GuitarSprite; }
+	int32 GetSpecialCost() const { return SpecialManaCost; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -52,6 +61,8 @@ private:
 	AArenaEnemy* FindEnemyNear(const FVector& Point) const;
 	void UpdateAnimation(const FVector2D& Direction);
 	void UpdateBlink();
+	void UpdateGuitar();
+	void CastSpecial();
 	void PlayStrike();
 	void Die();
 
@@ -63,6 +74,9 @@ private:
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UPaperSpriteComponent> HeldFlail;
+
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<UPaperSpriteComponent> Guitar;
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UCameraComponent> Camera;
@@ -122,10 +136,30 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Auto Attack")
 	float ClickRadius = 90.f;
 
-	UPROPERTY(EditAnywhere, Category = "Mana")
-	float MaxMana = 100.f;
+	UPROPERTY(EditAnywhere, Category = "Special")
+	TObjectPtr<UPaperSprite> GuitarSprite;
 
-	float Mana = 0.f;
+	UPROPERTY(EditAnywhere, Category = "Special")
+	TObjectPtr<UPaperSprite> ShockBurstSprite;
+
+	UPROPERTY(EditAnywhere, Category = "Special")
+	int32 MaxMana = 1;
+
+	UPROPERTY(EditAnywhere, Category = "Special")
+	int32 SpecialManaCost = 1;
+
+	UPROPERTY(EditAnywhere, Category = "Special")
+	float SpecialDamage = 16.f;
+
+	UPROPERTY(EditAnywhere, Category = "Special")
+	float SpecialRadius = 1100.f;
+
+	UPROPERTY(EditAnywhere, Category = "Special")
+	float SpecialSeconds = 0.5f;
+
+	int32 Mana = 0;
+	double StunnedUntil = 0.0;
+	double StrumEndsAt = 0.0;
 	FVector2D MoveInput = FVector2D::ZeroVector;
 	TOptional<FVector> MoveTarget;
 	TWeakObjectPtr<AArenaEnemy> HoveredEnemy;
