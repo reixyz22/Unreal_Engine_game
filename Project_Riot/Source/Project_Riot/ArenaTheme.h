@@ -6,6 +6,7 @@
 
 class AArenaEnemy;
 class UPaperFlipbook;
+class UPaperSprite;
 class USoundBase;
 
 // How one enemy type looks under a theme: an optional replacement animation, and a
@@ -49,6 +50,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Theme")
 	TObjectPtr<USoundBase> Music;
 
+	// The arena floor art for this theme; empty keeps the level's floor.
+	UPROPERTY(EditDefaultsOnly, Category = "Theme")
+	TObjectPtr<UPaperSprite> FloorSprite;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Theme")
 	FLinearColor FloorTint = FLinearColor(0.85f, 0.85f, 0.85f);
 
@@ -60,7 +65,7 @@ public:
 
 	// Only the pause screen takes the theme's color; gameplay UI stays fixed.
 	UPROPERTY(EditDefaultsOnly, Category = "Theme")
-	FLinearColor MenuWood = FLinearColor(0.2f, 0.11f, 0.05f);
+	FLinearColor MenuTint = FLinearColor::White;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Theme")
 	TArray<FEnemySkin> EnemySkins;

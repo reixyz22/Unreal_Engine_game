@@ -45,7 +45,14 @@ void AArenaGameMode::BeginPlay()
 	// The arena floor is the level's sprite actor.
 	for (TActorIterator<APaperSpriteActor> It(GetWorld()); It; ++It)
 	{
-		It->GetRenderComponent()->SetSpriteColor(Theme->FloorTint);
+		UPaperSpriteComponent* Floor = It->GetRenderComponent();
+		if (Theme->FloorSprite)
+		{
+			// Level sprites are static; the floor has to be movable to change art at runtime.
+			Floor->SetMobility(EComponentMobility::Movable);
+			Floor->SetSprite(Theme->FloorSprite);
+		}
+		Floor->SetSpriteColor(Theme->FloorTint);
 	}
 
 	GetWorldTimerManager().SetTimer(CheckTimer, this, &AArenaGameMode::CheckWave, CheckInterval, true, 1.f);

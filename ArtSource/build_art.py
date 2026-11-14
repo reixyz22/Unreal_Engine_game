@@ -142,6 +142,72 @@ def export_floor():
     floor.save(FLOOR_TARGET)
     floor.save(ROOT / "T_ArenaFloor.png")
 
+    # Nikki's World: the same dungeon pushed to purple (the look the game had before themes).
+    tone = (0.62, 0.58, 0.74)
+    bands = [band.point(lambda v, k=k: int(v * k)) for band, k in zip(floor.split()[:3], tone)]
+    Image.merge("RGBA", bands + [floor.split()[3]]).save(OUT / "T_Floor_NikkiWorld.png")
+    export_space_floor()
+
+
+def export_space_floor():
+    """Space: a clean test-chamber corridor. White 2x2-tile panels with thin seams,
+    a few black panels, and black walls with a white trim line. Drawn by script."""
+    rng = random.Random(11)
+    size, panel = FLOOR_PIXELS, WALL_PIXELS * 2
+    floor = Image.new("RGBA", (size, size), (18, 18, 22, 255))
+    draw = ImageDraw.Draw(floor)
+    inner = WALL_PIXELS
+    for top in range(inner, size - inner, panel):
+        for left in range(inner, size - inner, panel):
+            roll = rng.random()
+            fill = (26, 28, 34) if roll < 0.05 else (212, 215, 222) if roll < 0.2 else (234, 236, 240)
+            right, bottom = min(left + panel, size - inner) - 1, min(top + panel, size - inner) - 1
+            draw.rectangle((left, top, right, bottom), fill=(*fill, 255))
+            draw.line((left, top, right, top), fill=(250, 250, 252, 255))
+            draw.line((left, top, left, bottom), fill=(250, 250, 252, 255))
+            draw.line((left, bottom, right, bottom), fill=(150, 154, 164, 255))
+            draw.line((right, top, right, bottom), fill=(150, 154, 164, 255))
+    draw.rectangle((inner - 2, inner - 2, size - inner + 1, size - inner + 1), outline=(245, 245, 250, 255))
+    floor.save(OUT / "T_Floor_Space.png")
+
+
+def export_ui():
+    """Pixel-art UI pieces, drawn as 9-slice textures the HUD stretches without blurring corners."""
+    # Panel: bronze bevelled frame, rivets in the corners, dark plum inside. Corner = 8 px.
+    panel = Image.new("RGBA", (32, 32), (42, 28, 46, 255))
+    draw = ImageDraw.Draw(panel)
+    draw.rectangle((0, 0, 31, 31), outline=OUTLINE)
+    draw.rectangle((1, 1, 30, 30), outline=(200, 150, 70, 255))
+    draw.rectangle((2, 2, 29, 29), outline=(200, 150, 70, 255))
+    draw.line((1, 1, 30, 1), fill=(244, 206, 120, 255))
+    draw.line((1, 1, 1, 30), fill=(244, 206, 120, 255))
+    draw.line((2, 30, 30, 30), fill=(120, 78, 34, 255))
+    draw.line((30, 2, 30, 30), fill=(120, 78, 34, 255))
+    draw.rectangle((3, 3, 28, 28), outline=(24, 14, 26, 255))
+    for x, y in ((4, 4), (26, 4), (4, 26), (26, 26)):
+        draw.rectangle((x, y, x + 1, y + 1), fill=(244, 206, 120, 255))
+    panel.save(OUT / "UI_Panel.png")
+
+    # Button: parchment with a bevel. Corner = 4 px.
+    button = Image.new("RGBA", (16, 16), (222, 196, 140, 255))
+    draw = ImageDraw.Draw(button)
+    draw.rectangle((0, 0, 15, 15), outline=OUTLINE)
+    draw.line((1, 1, 14, 1), fill=(248, 230, 184, 255))
+    draw.line((1, 1, 1, 14), fill=(248, 230, 184, 255))
+    draw.line((1, 14, 14, 14), fill=(160, 126, 78, 255))
+    draw.line((14, 1, 14, 14), fill=(160, 126, 78, 255))
+    draw.line((2, 13, 13, 13), fill=(190, 160, 108, 255))
+    button.save(OUT / "UI_Button.png")
+
+    # Backdrop for the start screens: dark tiled brick, so the stage stays hidden.
+    backdrop = Image.new("RGBA", (32, 32), (20, 14, 26, 255))
+    draw = ImageDraw.Draw(backdrop)
+    for y in (0, 16):
+        draw.line((0, y, 31, y), fill=(32, 22, 40, 255))
+    for x, y0 in ((0, 0), (16, 16)):
+        draw.line((x, y0, x, y0 + 15), fill=(32, 22, 40, 255))
+    backdrop.save(OUT / "UI_Backdrop.png")
+
 
 def outline(image, colour=OUTLINE):
     """Add a 1px dark outline around opaque pixels, matching the pack art."""
@@ -276,6 +342,7 @@ def main():
     export_guitar()
     export_beam()
     export_chain_link()
+    export_ui()
     export_spaceman()
     export_shock_burst()
     export_shards()

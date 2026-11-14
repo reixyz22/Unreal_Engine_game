@@ -39,7 +39,7 @@ private:
 	UPROPERTY()
 	TObjectPtr<UAudioComponent> MusicPlayer;
 
-	float MusicVolume = 0.7f;
+	float MusicVolume = 0.5f;
 	float SfxVolume = 0.8f;
 	bool bMusicDucked = false;
 };

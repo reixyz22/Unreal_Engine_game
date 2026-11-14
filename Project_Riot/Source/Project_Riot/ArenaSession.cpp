@@ -7,7 +7,8 @@
 
 namespace
 {
-	constexpr float DuckedMusicScale = 0.35f;
+	constexpr float DuckedMusicScale = 0.3f;
+	constexpr float MusicFadeInSeconds = 2.5f;
 }
 
 UArenaSession* UArenaSession::Get(const UObject* WorldContext)
@@ -23,12 +24,13 @@ void UArenaSession::PlayMusic(USoundBase* Music)
 	{
 		MusicPlayer->Stop();
 	}
-	MusicPlayer = Music ? UGameplayStatics::SpawnSound2D(GetGameInstance()->GetWorld(), Music) : nullptr;
+	MusicPlayer = Music ? UGameplayStatics::CreateSound2D(GetGameInstance()->GetWorld(), Music) : nullptr;
 	if (IsValid(MusicPlayer))
 	{
 		// UI sounds keep playing while the game is paused, so menus have music.
 		MusicPlayer->bIsUISound = true;
 		ApplyMusicVolume();
+		MusicPlayer->FadeIn(MusicFadeInSeconds);
 	}
 }
 

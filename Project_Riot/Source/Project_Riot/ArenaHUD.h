@@ -75,14 +75,20 @@ private:
 	void DrawStunStars(const AArenaPlayerPawn& Hero);
 	void DrawDeathBanner(const AArenaGameMode& GameMode);
 	void DrawBox(float X, float Y, float Width, float Height, const FLinearColor& Fill, const FLinearColor& Border, float BorderWidth);
+	// Draws a texture stretched to a box with its corners kept crisp (9-slice).
+	void DrawNineSlice(UTexture2D* Texture, float CornerPixels, float X, float Y, float Width, float Height, const FLinearColor& Tint);
 	void DrawCentered(const FString& Text, float CenterX, float Y, const FLinearColor& Color, float Scale, UFont* Font = nullptr);
 
-	// Optional art for the pause menu; plain wood and parchment boxes are drawn when empty.
+	// Menu art, drawn as 9-slices (corners stay crisp when stretched). Plain boxes if empty.
 	UPROPERTY(EditDefaultsOnly, Category = "Menu")
 	TObjectPtr<UTexture2D> PanelTexture;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Menu")
 	TObjectPtr<UTexture2D> ButtonTexture;
+
+	// Tiled behind the start screens so the stage stays hidden until play begins.
+	UPROPERTY(EditDefaultsOnly, Category = "Menu")
+	TObjectPtr<UTexture2D> BackdropTexture;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Menu")
 	TObjectPtr<UFont> MenuFont;

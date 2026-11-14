@@ -29,6 +29,11 @@ namespace
 	const FLinearColor Parchment(0.86f, 0.74f, 0.52f);
 	const FLinearColor ParchmentLit(0.98f, 0.88f, 0.64f);
 	const FLinearColor Ink(0.24f, 0.13f, 0.05f);
+	const FLinearColor Gold(0.96f, 0.8f, 0.45f);
+	// UI art is pixel art drawn at this many screen pixels per art pixel.
+	constexpr float UiScale = 3.f;
+	constexpr float PanelCorner = 8.f;
+	constexpr float ButtonCorner = 4.f;
 	constexpr float HealthPerNotch = 10.f;
 	const FLinearColor WaveYellow(1.f, 0.85f, 0.2f);
 	constexpr float OverheadBarWidth = 56.f;
@@ -306,6 +311,27 @@ void AArenaHUD::DrawHealthBar(const UHealthComponent& Health, float X, float Y, 
 	}
 }
 
+void AArenaHUD::DrawNineSlice(UTexture2D* Texture, float CornerPixels, float X, float Y, float Width, float Height, const FLinearColor& Tint)
+{
+	// Split the texture and the target box into a 3x3 grid. Corners keep their size,
+	// edges stretch one way, and the middle stretches both ways.
+	const float TexW = Texture->GetSizeX();
+	const float TexH = Texture->GetSizeY();
+	const float Corner = FMath::Min3(CornerPixels * UiScale, Width * 0.5f, Height * 0.5f);
+	const float Xs[4] = { X, X + Corner, X + Width - Corner, X + Width };
+	const float Ys[4] = { Y, Y + Corner, Y + Height - Corner, Y + Height };
+	const float Us[4] = { 0.f, CornerPixels / TexW, 1.f - CornerPixels / TexW, 1.f };
+	const float Vs[4] = { 0.f, CornerPixels / TexH, 1.f - CornerPixels / TexH, 1.f };
+	for (int32 Row = 0; Row < 3; ++Row)
+	{
+		for (int32 Col = 0; Col < 3; ++Col)
+		{
+			DrawTexture(Texture, Xs[Col], Ys[Row], Xs[Col + 1] - Xs[Col], Ys[Row + 1] - Ys[Row],
+				Us[Col], Vs[Row], Us[Col + 1] - Us[Col], Vs[Row + 1] - Vs[Row], Tint, BLEND_Translucent);
+		}
+	}
+}
+
 void AArenaHUD::DrawBox(float X, float Y, float Width, float Height, const FLinearColor& Fill, const FLinearColor& Border, float BorderWidth)
 {
 	DrawRect(Border, X, Y, Width, Height);
@@ -342,22 +368,32 @@ UFont* AArenaHUD::GetMenuFont() const
 
 void AArenaHUD::DrawPanel(float X, float Y, float Width, float Height, const FString& Title)
 {
-	// Menus take the run's theme wood; everything in play stays fixed.
-	const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
-	FLinearColor PanelWood = GameMode ? GameMode->GetTheme().MenuWood : Wood;
-	PanelWood.A = Wood.A;
-
-	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.55f), 0.f, 0.f, Canvas->ClipX, Canvas->ClipY);
-	if (PanelTexture)
+	// The start screens hide the stage entirely; the pause menu dims it and takes the theme's tint.
+	const bool bStartScreen = CurrentScreen != EScreen::Paused;
+	if (bStartScreen && BackdropTexture)
 	{
-		DrawTexture(PanelTexture, X, Y, Width, Height, 0.f, 0.f, 1.f, 1.f, FLinearColor::White, BLEND_Translucent);
+		const float Tile = BackdropTexture->GetSizeX() * UiScale;
+		DrawTexture(BackdropTexture, 0.f, 0.f, Canvas->ClipX, Canvas->ClipY, 0.f, 0.f,
+			Canvas->ClipX / Tile, Canvas->ClipY / Tile, FLinearColor::White, BLEND_Opaque);
 	}
 	else
 	{
-		DrawBox(X, Y, Width, Height, PanelWood, WoodEdge, 5.f);
-		DrawRect(WoodEdge * 0.6f, X + 14.f, Y + 82.f, Width - 28.f, 2.f);
+		DrawRect(FLinearColor(0.f, 0.f, 0.f, bStartScreen ? 1.f : 0.55f), 0.f, 0.f, Canvas->ClipX, Canvas->ClipY);
 	}
-	DrawCentered(Title, X + Width * 0.5f, Y + 22.f, Parchment, 2.f, GetMenuFont());
+
+	const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+	const FLinearColor Tint = (!bStartScreen && GameMode) ? GameMode->GetTheme().MenuTint : FLinearColor::White;
+	if (PanelTexture)
+	{
+		DrawNineSlice(PanelTexture, PanelCorner, X, Y, Width, Height, Tint);
+	}
+	else
+	{
+		DrawBox(X, Y, Width, Height, Wood, WoodEdge, 5.f);
+	}
+	DrawRect(Gold * 0.7f, X + 30.f, Y + 82.f, Width - 60.f, 2.f);
+	DrawCentered(Title, X + Width * 0.5f + 2.f, Y + 24.f, FLinearColor(0.f, 0.f, 0.f, 0.7f), 2.f, GetMenuFont());
+	DrawCentered(Title, X + Width * 0.5f, Y + 22.f, Gold, 2.f, GetMenuFont());
 }
 
 void AArenaHUD::DrawButton(FMenuButton& Button, const FVector2D& Mouse)
@@ -367,8 +403,8 @@ void AArenaHUD::DrawButton(FMenuButton& Button, const FVector2D& Mouse)
 	const bool bHovered = Button.Rect.IsInside(Mouse);
 	if (ButtonTexture)
 	{
-		DrawTexture(ButtonTexture, Min.X, Min.Y, Size.X, Size.Y, 0.f, 0.f, 1.f, 1.f,
-			bHovered ? FLinearColor(1.15f, 1.1f, 1.f) : FLinearColor::White, BLEND_Translucent);
+		DrawNineSlice(ButtonTexture, ButtonCorner, Min.X, Min.Y, Size.X, Size.Y,
+			bHovered ? FLinearColor(1.12f, 1.08f, 0.95f) : FLinearColor(0.92f, 0.9f, 0.88f));
 	}
 	else
 	{
@@ -400,8 +436,16 @@ void AArenaHUD::DrawSlider(FMenuSlider& Slider, float X, float Y, float Width)
 	Slider.Track = FBox2D(FVector2D(TrackX, Y - 10.f), FVector2D(TrackX + TrackWidth, Y + TrackHeight + 10.f));
 	const float Value = Slider.Get();
 	DrawBox(TrackX, Y, TrackWidth, TrackHeight, BarBacking, Ink, 2.f);
-	DrawRect(Parchment, TrackX + 2.f, Y + 2.f, (TrackWidth - 4.f) * Value, TrackHeight - 4.f);
-	DrawBox(TrackX + TrackWidth * Value - 7.f, Y - 7.f, 14.f, TrackHeight + 14.f, ParchmentLit, Ink, 2.f);
+	DrawRect(Gold * 0.8f, TrackX + 2.f, Y + 2.f, (TrackWidth - 4.f) * Value, TrackHeight - 4.f);
+	const float KnobX = TrackX + TrackWidth * Value - 9.f;
+	if (ButtonTexture)
+	{
+		DrawNineSlice(ButtonTexture, ButtonCorner, KnobX, Y - 8.f, 18.f, TrackHeight + 16.f, FLinearColor::White);
+	}
+	else
+	{
+		DrawBox(KnobX, Y - 7.f, 14.f, TrackHeight + 14.f, ParchmentLit, Ink, 2.f);
+	}
 }
 
 void AArenaHUD::DrawHeroSelect()
@@ -451,7 +495,6 @@ void AArenaHUD::DrawControls()
 		TEXT("WASD  -  move"),
 		TEXT("Right-click an enemy  -  throw the ball and chain"),
 		TEXT("Q  -  shock blast (1 mana; Clerics drop mana shards)"),
-		TEXT("A thin gold line means a Cleric beam is coming: get out of it"),
 		TEXT("Esc  -  menu: pause, volume, fog  (P works too)"),
 	};
 	constexpr float LineHeight = 40.f;
@@ -468,7 +511,7 @@ void AArenaHUD::DrawControls()
 		Y += LineHeight;
 	}
 	const float Blink = 0.6f + 0.4f * FMath::Sin(GetWorld()->GetRealTimeSeconds() * 4.f);
-	DrawCentered(TEXT("Press W, A, S or D to start"), Canvas->ClipX * 0.5f, Y + 24.f, WaveYellow * Blink, 1.3f, GetMenuFont());
+	DrawCentered(TEXT("Press W, A, S or D to start"), Canvas->ClipX * 0.5f, Y + 24.f, Gold * Blink, 1.3f, GetMenuFont());
 }
 
 void AArenaHUD::DrawPauseMenu()

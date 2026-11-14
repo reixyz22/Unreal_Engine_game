@@ -16,12 +16,14 @@ TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 THEME_MUSIC = {"Dungeon": "/Game/Audio/BGM_Dungeon", "Space": "/Game/Audio/BGM_Space"}
 
 # Not characters: no glow, no outline.
-PLAIN_SPRITES = {"T_ArenaFloor_Sprite", "T_Player_Sprite"}
+PLAIN_SPRITES = {"T_ArenaFloor_Sprite", "T_Player_Sprite", "T_Floor_NikkiWorld_Sprite", "T_Floor_Space_Sprite",
+                 "UI_Panel_Sprite", "UI_Button_Sprite", "UI_Backdrop_Sprite"}
 BRIGHT_SPRITES = {"Pyro_Bead_Sprite", "Flail_Ball_Sprite", "Cleric_Beam_Sprite", "Shock_Burst_Sprite",
                   "Shard_Mana_Sprite", "Shard_Health_Sprite"}
 # Frames from build_art.py that get a texture and a sprite here.
 FRAMES = ["Nikki_Guitar", "Cleric_Beam", "Chain_Link", "Shock_Burst", "Shard_Mana", "Shard_Health"] + [f"Cleric_Run_{i}" for i in range(4)] \
-    + [f"Spaceman_Run_{i}" for i in range(4)]
+    + [f"Spaceman_Run_{i}" for i in range(4)] \
+    + ["T_Floor_NikkiWorld", "T_Floor_Space", "UI_Panel", "UI_Button", "UI_Backdrop"]
 
 SPRITE_HLSL = """
 float W, H;
@@ -327,16 +329,19 @@ def build_themes(pyro, cleric, music, spaceman):
 
     space = blueprint("BP_Theme_Space", unreal.ArenaTheme)
     set_defaults(space, display_name=unreal.Text("Space"), music=music["Space"],
-                 floor_tint=colour(0.3, 0.38, 0.72), fog_color=colour(0.08, 0.12, 0.38), fog_density=0.4,
-                 menu_wood=colour(0.05, 0.07, 0.16),
+                 # Kept below the bloom threshold so the white corridor doesn't wash out.
+                 floor_sprite=unreal.load_asset(f"{ART}/T_Floor_Space_Sprite"),
+                 floor_tint=colour(0.52, 0.54, 0.6), fog_color=colour(0.08, 0.12, 0.38), fog_density=0.4,
+                 menu_tint=colour(0.75, 0.85, 1.0),
                  # Pyros become William's spacemen: their own art, so no palette swap.
                  enemy_skins=[skin(pyro, colour(0, 0, 0), colour(1, 1, 1), 0.0, spaceman),
                               skin(cleric, colour(0.02, 0.0, 0.02), colour(0.95, 0.1, 0.15), 0.95)])
 
     nikki = blueprint("BP_Theme_NikkiWorld", unreal.ArenaTheme)
     set_defaults(nikki, display_name=unreal.Text("Nikki's World"), music=music["NikkiWorld"],
-                 floor_tint=colour(0.62, 0.58, 0.74), fog_color=colour(0.45, 0.32, 0.7), fog_density=0.35,
-                 menu_wood=colour(0.16, 0.04, 0.12),
+                 floor_sprite=unreal.load_asset(f"{ART}/T_Floor_NikkiWorld_Sprite"),
+                 floor_tint=colour(1.0, 1.0, 1.0), fog_color=colour(0.45, 0.32, 0.7), fog_density=0.35,
+                 menu_tint=colour(1.0, 0.8, 0.92),
                  enemy_skins=[skin(pyro, colour(0.01, 0.01, 0.02), colour(1.0, 0.2, 0.6), 0.85),
                               skin(cleric, colour(0.01, 0.01, 0.02), colour(1.0, 0.2, 0.6), 0.85)])
     return [dungeon, space, nikki]
@@ -380,7 +385,9 @@ def main():
                  health_shard_sprite=unreal.load_asset(f"{ART}/Shard_Health_Sprite"),
                  beam_charge_sound=sounds["SFX_BeamCharge"], beam_fire_sound=sounds["SFX_BeamFire"])
     hud = blueprint("BP_ArenaHUD", unreal.ArenaHUD)
-    set_defaults(hud)
+    set_defaults(hud, panel_texture=unreal.load_asset(f"{ART}/UI_Panel"),
+                 button_texture=unreal.load_asset(f"{ART}/UI_Button"),
+                 backdrop_texture=unreal.load_asset(f"{ART}/UI_Backdrop"))
     import_music()
     chiptune = unreal.load_asset("/Game/Audio/chiptune-police_loop")
     theme_music = {"Dungeon": chiptune, "Space": chiptune, "NikkiWorld": chiptune}
