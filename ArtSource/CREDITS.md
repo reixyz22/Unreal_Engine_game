@@ -15,6 +15,14 @@ Red spiked flail from **[CC0 Flail Icons](https://opengameart.org/content/cc0-fl
 ## Nikki's guitar
 Hand-painted by me (`Nikki/guitar_painted.png`). `build_art.py` keys out the paper, shrinks it to sprite size and outlines it.
 
+## Music
+- Dungeon theme: "Dungeon Ambience" by yd, CC0, from [OpenGameArt](https://opengameart.org/node/32333) (`Music/dungeon002.ogg`).
+- Space theme: "Outer Space Loop" by wipics, CC0, from [OpenGameArt](https://opengameart.org/content/outer-space-loop) (`Music/outer_space.mp3`).
+- Nikki's World theme: "chiptune police loop" by obscure music, CC0.
+
+## Space theme spacemen
+Drawn by me in MS Paint (`Space/spaceman_painted.png`). `build_art.py` keys out the background and animates the run.
+
 ## Sound effects
 Synthesized from scratch by `build_sounds.py` (no samples): the chain whoosh and hit, the Cleric beam charge and zap, and a plucked-string guitar strum.
 

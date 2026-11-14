@@ -226,6 +226,33 @@ def export_shards():
         outline(shard).save(OUT / f"Shard_{name}.png")
 
 
+def export_spaceman():
+    """William's MS Paint spaceman: key out the outside white, then animate a 4-frame run.
+
+    The paint file has no transparency, so white connected to the edge is background;
+    white enclosed by the outline is the suit and stays.
+    """
+    painted = Image.open(ROOT / "Space" / "spaceman_painted.png").convert("RGBA")
+    painted.putpixel((13, 14), OUTLINE)  # close the right boot so the fill can't leak into the leg
+    frame = Image.new("RGBA", (painted.width + 2, painted.height + 2), (255, 255, 255, 255))
+    frame.paste(painted, (1, 1))
+    ImageDraw.floodfill(frame, (0, 0), (0, 0, 0, 0))
+
+    legs_top = 12  # rows below this are legs; mirroring them swaps the stride
+    legs = frame.crop((0, legs_top, frame.width, frame.height)).transpose(Image.FLIP_LEFT_RIGHT)
+    stride = frame.copy()
+    stride.paste(Image.new("RGBA", legs.size), (0, legs_top))
+    stride.alpha_composite(legs, (0, legs_top))
+
+    def bob(image):
+        raised = Image.new("RGBA", image.size)
+        raised.alpha_composite(image.crop((0, 1, image.width, image.height)), (0, 0))
+        return raised
+
+    for index, image in enumerate((frame, bob(frame), stride, bob(stride))):
+        image.save(OUT / f"Spaceman_Run_{index}.png")
+
+
 def export_cursors():
     CURSOR_TARGET.mkdir(parents=True, exist_ok=True)
     for hero, colour in HERO_CURSORS.items():
@@ -249,6 +276,7 @@ def main():
     export_guitar()
     export_beam()
     export_chain_link()
+    export_spaceman()
     export_shock_burst()
     export_shards()
 

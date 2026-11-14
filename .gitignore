@@ -13,3 +13,4 @@ Project_Riot/Windows/
 Project_Riot/Build/Windows/FileOpenOrder/
 __MACOSX/
 .DS_Store
+ArtSource/Music/*.wav

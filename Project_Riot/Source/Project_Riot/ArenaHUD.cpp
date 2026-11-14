@@ -452,7 +452,7 @@ void AArenaHUD::DrawControls()
 		TEXT("Right-click an enemy  -  throw the ball and chain"),
 		TEXT("Q  -  shock blast (1 mana; Clerics drop mana shards)"),
 		TEXT("A thin gold line means a Cleric beam is coming: get out of it"),
-		TEXT("P / Esc  -  pause, volume, fog"),
+		TEXT("Esc  -  menu: pause, volume, fog  (P works too)"),
 	};
 	constexpr float LineHeight = 40.f;
 	const float PanelWidth = FMath::Min(760.f, Canvas->ClipX - 40.f);

@@ -5,6 +5,7 @@ Pure Python, no samples: each sound is built from sine, noise and a plucked-stri
 import math
 import random
 import struct
+import subprocess
 import wave
 from pathlib import Path
 
@@ -97,7 +98,20 @@ def guitar_strum():
     write("SFX_Strum", mix, 0.75)
 
 
+MUSIC = Path(__file__).parent / "Music"
+# Downloaded theme tracks -> the WAV name setup_assets.py imports. Needs ffmpeg on PATH.
+TRACKS = {"dungeon002.ogg": "BGM_Dungeon", "outer_space.mp3": "BGM_Space"}
+
+
+def convert_music():
+    """Loudness-match the tracks and write mono 32 kHz WAVs (Unreal imports WAV)."""
+    for source, name in TRACKS.items():
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(MUSIC / source),
+                        "-af", "loudnorm=I=-18:TP=-2", "-ac", "1", "-ar", "32000", str(MUSIC / f"{name}.wav")], check=True)
+
+
 def main():
+    convert_music()
     chain_throw()
     chain_hit()
     beam_charge()

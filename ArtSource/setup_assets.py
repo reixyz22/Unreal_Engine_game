@@ -20,7 +20,8 @@ PLAIN_SPRITES = {"T_ArenaFloor_Sprite", "T_Player_Sprite"}
 BRIGHT_SPRITES = {"Pyro_Bead_Sprite", "Flail_Ball_Sprite", "Cleric_Beam_Sprite", "Shock_Burst_Sprite",
                   "Shard_Mana_Sprite", "Shard_Health_Sprite"}
 # Frames from build_art.py that get a texture and a sprite here.
-FRAMES = ["Nikki_Guitar", "Cleric_Beam", "Chain_Link", "Shock_Burst", "Shard_Mana", "Shard_Health"] + [f"Cleric_Run_{i}" for i in range(4)]
+FRAMES = ["Nikki_Guitar", "Cleric_Beam", "Chain_Link", "Shock_Burst", "Shard_Mana", "Shard_Health"] + [f"Cleric_Run_{i}" for i in range(4)] \
+    + [f"Spaceman_Run_{i}" for i in range(4)]
 
 SPRITE_HLSL = """
 float W, H;
@@ -260,6 +261,26 @@ def import_sounds():
     return {name: unreal.load_asset(f"/Game/Audio/{name}") for name in names}
 
 
+def import_music():
+    """Import the theme tracks (made by build_sounds.py) and make them loop."""
+    folder = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir() + "../ArtSource/Music/")
+    tasks = []
+    for path in THEME_MUSIC.values():
+        name = path.rsplit("/", 1)[1]
+        task = unreal.AssetImportTask()
+        task.filename = folder + name + ".wav"
+        task.destination_path = "/Game/Audio"
+        task.replace_existing = True
+        task.automated = True
+        task.save = False
+        tasks.append(task)
+    TOOLS.import_asset_tasks(tasks)
+    for path in THEME_MUSIC.values():
+        track = unreal.load_asset(path)
+        track.set_editor_property("looping", True)
+        EAL.save_loaded_asset(track, False)
+
+
 def flipbook(name, sprite_names, fps):
     path = f"{ART}/{name}"
     book = unreal.load_asset(path) if EAL.does_asset_exist(path) else         TOOLS.create_asset(name, ART, unreal.PaperFlipbook, unreal.PaperFlipbookFactory())
@@ -287,16 +308,18 @@ def colour(r, g, b):
     return unreal.LinearColor(r, g, b, 1.0)
 
 
-def skin(enemy_bp, shadow, light, strength):
+def skin(enemy_bp, shadow, light, strength, anim=None):
     entry = unreal.EnemySkin()
     entry.set_editor_property("type", enemy_bp.generated_class())
+    if anim:
+        entry.set_editor_property("anim", anim)
     entry.set_editor_property("shadow", shadow)
     entry.set_editor_property("light", light)
     entry.set_editor_property("strength", strength)
     return entry
 
 
-def build_themes(pyro, cleric, music):
+def build_themes(pyro, cleric, music, spaceman):
     """One Blueprint per theme; each overrides only what differs from UArenaTheme's defaults."""
     dungeon = blueprint("BP_Theme_Dungeon", unreal.ArenaTheme)
     set_defaults(dungeon, display_name=unreal.Text("Dungeon"), music=music["Dungeon"],
@@ -306,7 +329,8 @@ def build_themes(pyro, cleric, music):
     set_defaults(space, display_name=unreal.Text("Space"), music=music["Space"],
                  floor_tint=colour(0.3, 0.38, 0.72), fog_color=colour(0.08, 0.12, 0.38), fog_density=0.4,
                  menu_wood=colour(0.05, 0.07, 0.16),
-                 enemy_skins=[skin(pyro, colour(0.05, 0.08, 0.22), colour(0.85, 0.95, 1.0), 0.9),
+                 # Pyros become William's spacemen: their own art, so no palette swap.
+                 enemy_skins=[skin(pyro, colour(0, 0, 0), colour(1, 1, 1), 0.0, spaceman),
                               skin(cleric, colour(0.02, 0.0, 0.02), colour(0.95, 0.1, 0.15), 0.95)])
 
     nikki = blueprint("BP_Theme_NikkiWorld", unreal.ArenaTheme)
@@ -357,12 +381,14 @@ def main():
                  beam_charge_sound=sounds["SFX_BeamCharge"], beam_fire_sound=sounds["SFX_BeamFire"])
     hud = blueprint("BP_ArenaHUD", unreal.ArenaHUD)
     set_defaults(hud)
+    import_music()
     chiptune = unreal.load_asset("/Game/Audio/chiptune-police_loop")
     theme_music = {"Dungeon": chiptune, "Space": chiptune, "NikkiWorld": chiptune}
     for name, path in THEME_MUSIC.items():
         if EAL.does_asset_exist(path):
             theme_music[name] = unreal.load_asset(path)
-    themes = build_themes(pyro, cleric, theme_music)
+    spaceman = flipbook("FB_SpacemanRun", [f"Spaceman_Run_{i}_Sprite" for i in range(4)], 8.0)
+    themes = build_themes(pyro, cleric, theme_music, spaceman)
     nikki_bp = unreal.load_asset(f"{CORE}/BP_ArenaPlayerPawn")
     # Pyros fill every wave; Clerics join from wave 3 at a fifth of the wave.
     set_defaults(unreal.load_asset(f"{CORE}/BP_ArenaGameMode"),
