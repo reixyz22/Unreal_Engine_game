@@ -31,6 +31,10 @@ struct FEnemySkin
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	float Strength = 0.f;
+
+	// Tint for anything this enemy fires (Pyro beads).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FLinearColor ProjectileTint = FLinearColor::White;
 };
 
 // A run's look and sound. Each theme is a Blueprint subclass that overrides only what it

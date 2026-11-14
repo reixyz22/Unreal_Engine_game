@@ -70,8 +70,7 @@ private:
 
 	void DrawHealthBars();
 	void DrawWaveBanner(const AArenaGameMode& GameMode);
-	void DrawHeroPanel(const AArenaPlayerPawn& Hero);
-	void DrawSpecialSlot(const AArenaPlayerPawn& Hero);
+	void DrawSpecialsBar(const AArenaPlayerPawn& Hero);
 	void DrawStunStars(const AArenaPlayerPawn& Hero);
 	void DrawDeathBanner(const AArenaGameMode& GameMode);
 	void DrawBox(float X, float Y, float Width, float Height, const FLinearColor& Fill, const FLinearColor& Border, float BorderWidth);

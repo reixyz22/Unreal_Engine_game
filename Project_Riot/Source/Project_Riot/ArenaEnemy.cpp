@@ -43,7 +43,7 @@ void AArenaEnemy::BeginPlay()
 	SetActorLocation(Start);
 
 	const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
-	const FEnemySkin* Skin = GameMode ? GameMode->GetTheme().FindSkin(GetClass()) : nullptr;
+	Skin = GameMode ? GameMode->GetTheme().FindSkin(GetClass()) : nullptr;
 	if (Skin && Skin->Anim)
 	{
 		BodyAnim = Skin->Anim;

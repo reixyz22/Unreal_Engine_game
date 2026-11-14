@@ -243,6 +243,10 @@ def import_frames():
         sprite.set_editor_property("source_texture", texture)
         sprite.set_editor_property("source_uv", unreal.Vector2D(0, 0))
         sprite.set_editor_property("source_dimension", unreal.Vector2D(texture.blueprint_get_size_x(), texture.blueprint_get_size_y()))
+        if name.startswith("T_Floor_"):
+            # Theme floors must match the level floor's scale (4 world units per pixel, DECISIONS.md 002).
+            level_floor = unreal.load_asset(f"{ART}/T_ArenaFloor_Sprite")
+            sprite.set_editor_property("pixels_per_unreal_unit", level_floor.get_editor_property("pixels_per_unreal_unit"))
         EAL.save_loaded_asset(sprite, False)
 
 
@@ -310,8 +314,10 @@ def colour(r, g, b):
     return unreal.LinearColor(r, g, b, 1.0)
 
 
-def skin(enemy_bp, shadow, light, strength, anim=None):
+def skin(enemy_bp, shadow, light, strength, anim=None, projectile=None):
     entry = unreal.EnemySkin()
+    if projectile:
+        entry.set_editor_property("projectile_tint", projectile)
     entry.set_editor_property("type", enemy_bp.generated_class())
     if anim:
         entry.set_editor_property("anim", anim)
@@ -334,7 +340,7 @@ def build_themes(pyro, cleric, music, spaceman):
                  floor_tint=colour(0.52, 0.54, 0.6), fog_color=colour(0.08, 0.12, 0.38), fog_density=0.4,
                  menu_tint=colour(0.75, 0.85, 1.0),
                  # Pyros become William's spacemen: their own art, so no palette swap.
-                 enemy_skins=[skin(pyro, colour(0, 0, 0), colour(1, 1, 1), 0.0, spaceman),
+                 enemy_skins=[skin(pyro, colour(0, 0, 0), colour(1, 1, 1), 0.0, spaceman, projectile=colour(0.25, 1.0, 0.35)),
                               skin(cleric, colour(0.02, 0.0, 0.02), colour(0.95, 0.1, 0.15), 0.95)])
 
     nikki = blueprint("BP_Theme_NikkiWorld", unreal.ArenaTheme)
@@ -342,7 +348,7 @@ def build_themes(pyro, cleric, music, spaceman):
                  floor_sprite=unreal.load_asset(f"{ART}/T_Floor_NikkiWorld_Sprite"),
                  floor_tint=colour(1.0, 1.0, 1.0), fog_color=colour(0.45, 0.32, 0.7), fog_density=0.35,
                  menu_tint=colour(1.0, 0.8, 0.92),
-                 enemy_skins=[skin(pyro, colour(0.01, 0.01, 0.02), colour(1.0, 0.2, 0.6), 0.85),
+                 enemy_skins=[skin(pyro, colour(0.01, 0.01, 0.02), colour(1.0, 0.2, 0.6), 0.85, projectile=colour(0.03, 0.03, 0.04)),
                               skin(cleric, colour(0.01, 0.01, 0.02), colour(1.0, 0.2, 0.6), 0.85)])
     return [dungeon, space, nikki]
 

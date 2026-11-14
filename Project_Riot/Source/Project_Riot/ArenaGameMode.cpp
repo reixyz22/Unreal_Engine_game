@@ -30,8 +30,19 @@ void AArenaGameMode::InitGame(const FString& MapName, const FString& Options, FS
 {
 	Super::InitGame(MapName, Options, ErrorMessage);
 
-	const TSubclassOf<UArenaTheme> Picked = Themes.IsEmpty() ? nullptr : Themes[FMath::RandRange(0, Themes.Num() - 1)];
+	// Shuffle bag of one: any theme except the one just played.
+	UArenaSession* Session = UArenaSession::Get(this);
+	TArray<TSubclassOf<UArenaTheme>> Choices = Themes;
+	if (Session && Choices.Num() > 1)
+	{
+		Choices.Remove(Session->LastTheme.Get());
+	}
+	const TSubclassOf<UArenaTheme> Picked = Choices.IsEmpty() ? nullptr : Choices[FMath::RandRange(0, Choices.Num() - 1)];
 	Theme = Picked ? Picked->GetDefaultObject<UArenaTheme>() : GetDefault<UArenaTheme>();
+	if (Session)
+	{
+		Session->LastTheme = Picked;
+	}
 }
 
 void AArenaGameMode::BeginPlay()

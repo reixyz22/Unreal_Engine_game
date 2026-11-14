@@ -1,6 +1,7 @@
 #include "PyroEnemy.h"
 
 #include "ArenaProjectile.h"
+#include "ArenaTheme.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
@@ -86,6 +87,7 @@ void APyroEnemy::Fire()
 
 	if (AArenaProjectile* Bead = GetWorld()->SpawnActor<AArenaProjectile>(SpawnAt, FRotator::ZeroRotator))
 	{
-		Bead->Launch(BeadSprite, FLinearColor::White, Direction.GetSafeNormal() * BeadSpeed, BeadDamage);
+		const FLinearColor BeadTint = Skin ? Skin->ProjectileTint : FLinearColor::White;
+		Bead->Launch(BeadSprite, BeadTint, Direction.GetSafeNormal() * BeadSpeed, BeadDamage);
 	}
 }

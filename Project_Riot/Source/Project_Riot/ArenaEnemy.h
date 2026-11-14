@@ -46,6 +46,9 @@ protected:
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UHealthComponent> Health;
 
+	// This run's theme skin for this enemy type, if any (set in BeginPlay).
+	const struct FEnemySkin* Skin = nullptr;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy")
 	TObjectPtr<UPaperFlipbook> BodyAnim;
 

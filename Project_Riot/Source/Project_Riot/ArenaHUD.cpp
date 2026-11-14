@@ -127,8 +127,7 @@ void AArenaHUD::DrawHUD()
 	}
 	if (const AArenaPlayerPawn* Hero = Cast<AArenaPlayerPawn>(GetOwningPawn()))
 	{
-		DrawHeroPanel(*Hero);
-		DrawSpecialSlot(*Hero);
+		DrawSpecialsBar(*Hero);
 		DrawStunStars(*Hero);
 	}
 	switch (CurrentScreen)
@@ -218,40 +217,43 @@ void AArenaHUD::DrawWaveBanner(const AArenaGameMode& GameMode)
 	}
 }
 
-void AArenaHUD::DrawHeroPanel(const AArenaPlayerPawn& Hero)
+void AArenaHUD::DrawSpecialsBar(const AArenaPlayerPawn& Hero)
 {
-	// Bottom-center panel: Nikki's health.
-	const float Width = FMath::Min(420.f, Canvas->ClipX * 0.4f);
-	const float X = (Canvas->ClipX - Width) * 0.5f;
-	const float Y = Canvas->ClipY - 56.f;
+	// Bottom-middle bar of special slots (Q for now), each with its key and mana pips.
+	// Health is already over Nikki's head, and the camera keeps her centred.
+	constexpr float Slot = 96.f;
+	constexpr float Pip = 14.f;
+	constexpr float Padding = 18.f;
+	const int32 Slots = 1;
+	const float BarWidth = Slots * Slot + Padding * 2.f;
+	const float BarHeight = Slot + Pip + Padding * 2.f + 10.f;
+	const float BarX = (Canvas->ClipX - BarWidth) * 0.5f;
+	const float BarY = Canvas->ClipY - BarHeight - 12.f;
+	if (PanelTexture)
+	{
+		DrawNineSlice(PanelTexture, PanelCorner, BarX, BarY, BarWidth, BarHeight, FLinearColor::White);
+	}
+	else
+	{
+		DrawRect(BarBacking, BarX, BarY, BarWidth, BarHeight);
+	}
 
-	const UHealthComponent& Health = Hero.GetHealth();
-	DrawHealthBar(Health, X, Y, Width, 18.f);
-	DrawCentered(FString::Printf(TEXT("%.0f / %.0f"), Health.GetHealth(), Health.GetMaxHealth()),
-		Canvas->ClipX * 0.5f, Y + 2.f, FLinearColor::White, 1.f, GEngine->GetSmallFont());
-}
-
-void AArenaHUD::DrawSpecialSlot(const AArenaPlayerPawn& Hero)
-{
-	// Bottom-left: the Q ability icon, greyed out until there's mana, with one pip per mana point.
-	constexpr float Slot = 64.f;
-	constexpr float Pip = 12.f;
-	const float X = 24.f;
-	const float Y = Canvas->ClipY - 24.f - Pip - 8.f - Slot;
+	const float X = BarX + Padding;
+	const float Y = BarY + Padding;
 	const bool bReady = Hero.GetMana() >= Hero.GetSpecialCost();
-
-	DrawRect(BarBacking, X - 3.f, Y - 3.f, Slot + 6.f, Slot + 6.f);
+	DrawRect(BarBacking, X, Y, Slot, Slot);
 	if (const UPaperSprite* Icon = Hero.GetSpecialIcon())
 	{
 		const FLinearColor Shade = bReady ? FLinearColor::White : FLinearColor(0.35f, 0.35f, 0.4f);
-		DrawTexture(Icon->GetBakedTexture(), X + 6.f, Y + 6.f, Slot - 12.f, Slot - 12.f, 0.f, 0.f, 1.f, 1.f, Shade, BLEND_Translucent);
+		DrawTexture(Icon->GetBakedTexture(), X + 10.f, Y + 10.f, Slot - 20.f, Slot - 20.f, 0.f, 0.f, 1.f, 1.f, Shade, BLEND_Translucent);
 	}
-	DrawText(TEXT("Q"), WaveYellow, X + 4.f, Y + 2.f, GEngine->GetSmallFont(), 1.f);
+	DrawText(TEXT("Q"), Gold, X + 6.f, Y + 4.f, GetMenuFont(), 1.f);
 
+	const float PipsWidth = Hero.GetMaxMana() * (Pip + 6.f) - 6.f;
 	for (int32 Index = 0; Index < Hero.GetMaxMana(); ++Index)
 	{
-		const float PipX = X + Index * (Pip + 6.f);
-		const float PipY = Y + Slot + 8.f;
+		const float PipX = X + (Slot - PipsWidth) * 0.5f + Index * (Pip + 6.f);
+		const float PipY = Y + Slot + 10.f;
 		DrawRect(ManaBlue, PipX, PipY, Pip, Pip);
 		if (Index >= Hero.GetMana())
 		{

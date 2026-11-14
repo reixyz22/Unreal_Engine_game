@@ -31,6 +31,7 @@ public:
 	void SetMusicDucked(bool bDucked);
 
 	TSubclassOf<AArenaPlayerPawn> ChosenHero;
+	TSubclassOf<UObject> LastTheme;
 	bool bIntroDone = false;
 
 private:
