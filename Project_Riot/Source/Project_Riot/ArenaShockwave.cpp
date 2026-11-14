@@ -57,7 +57,7 @@ void AArenaShockwave::Tick(float DeltaTime)
 		if (Inside(*It) && !HitAlready.Contains(*It))
 		{
 			HitAlready.Add(*It);
-			It->ReceiveDamage(Damage);
+			It->ReceiveDamage(Damage, this);
 		}
 	}
 	for (TActorIterator<AArenaProjectile> It(GetWorld()); It; ++It)

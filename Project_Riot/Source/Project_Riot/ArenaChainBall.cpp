@@ -135,7 +135,7 @@ void AArenaChainBall::HitEnemy(AArenaEnemy* Enemy)
 		return;
 	}
 
-	Enemy->ReceiveDamage(Damage);
+	Enemy->ReceiveDamage(Damage, this);
 	HitThisThrow.Add(Enemy);
 	UArenaSession::PlaySfx(this, HitSound);
 }

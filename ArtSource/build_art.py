@@ -171,6 +171,31 @@ def export_space_floor():
     floor.save(OUT / "T_Floor_Space.png")
 
 
+def export_skull():
+    """The death-screen skull (script-drawn pixel art)."""
+    rows = [
+        "....######....",
+        "..##########..",
+        ".############.",
+        ".############.",
+        "##..####..####",
+        "#....##....###",
+        "#....##....###",
+        "##..####..####",
+        ".#####..#####.",
+        "..####..####..",
+        "...########...",
+        "...#.#.#.#....",
+        "...########...",
+    ]
+    skull = Image.new("RGBA", (len(rows[0]), len(rows)))
+    for y, row in enumerate(rows):
+        for x, cell in enumerate(row):
+            if cell == "#":
+                skull.putpixel((x, y), (236, 230, 214, 255))
+    outline(skull).save(OUT / "UI_Skull.png")
+
+
 def export_ui():
     """Pixel-art UI pieces, drawn as 9-slice textures the HUD stretches without blurring corners."""
     # Panel: bronze bevelled frame, rivets in the corners, dark plum inside. Corner = 8 px.
@@ -343,6 +368,7 @@ def main():
     export_beam()
     export_chain_link()
     export_ui()
+    export_skull()
     export_spaceman()
     export_shock_burst()
     export_shards()

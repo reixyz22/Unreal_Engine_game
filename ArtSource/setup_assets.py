@@ -17,13 +17,13 @@ THEME_MUSIC = {"Dungeon": "/Game/Audio/BGM_Dungeon", "Space": "/Game/Audio/BGM_S
 
 # Not characters: no glow, no outline.
 PLAIN_SPRITES = {"T_ArenaFloor_Sprite", "T_Player_Sprite", "T_Floor_NikkiWorld_Sprite", "T_Floor_Space_Sprite",
-                 "UI_Panel_Sprite", "UI_Button_Sprite", "UI_Backdrop_Sprite"}
+                 "UI_Panel_Sprite", "UI_Button_Sprite", "UI_Backdrop_Sprite", "UI_Skull_Sprite"}
 BRIGHT_SPRITES = {"Pyro_Bead_Sprite", "Flail_Ball_Sprite", "Cleric_Beam_Sprite", "Shock_Burst_Sprite",
                   "Shard_Mana_Sprite", "Shard_Health_Sprite"}
 # Frames from build_art.py that get a texture and a sprite here.
 FRAMES = ["Nikki_Guitar", "Cleric_Beam", "Chain_Link", "Shock_Burst", "Shard_Mana", "Shard_Health"] + [f"Cleric_Run_{i}" for i in range(4)] \
     + [f"Spaceman_Run_{i}" for i in range(4)] \
-    + ["T_Floor_NikkiWorld", "T_Floor_Space", "UI_Panel", "UI_Button", "UI_Backdrop"]
+    + ["T_Floor_NikkiWorld", "T_Floor_Space", "UI_Panel", "UI_Button", "UI_Backdrop", "UI_Skull"]
 
 SPRITE_HLSL = """
 float W, H;
@@ -40,6 +40,13 @@ float Luma = dot(C.rgb, float3(0.299, 0.587, 0.114));
 float3 Swapped = lerp(PaletteShadow, PaletteLight, Luma);
 float3 Rgb = lerp(C.rgb, Swapped, PaletteStrength) * Tint * Glow;
 return float4(lerp(Rgb, Outline, Edge), max(C.a * TintA, Edge));
+"""
+
+ICON_HLSL = """
+float4 C = Texture2DSample(Tex, TexSampler, UV);
+float Luma = dot(C.rgb, float3(0.299, 0.587, 0.114));
+float3 Swapped = lerp(PaletteShadow, PaletteLight, Luma);
+return float4(lerp(C.rgb, Swapped, PaletteStrength), C.a);
 """
 
 FOG_HLSL = """
@@ -156,6 +163,31 @@ def build_bright_instance(parent):
     MEL.set_material_instance_scalar_parameter_value(instance, "Glow", 3.0)
     EAL.save_loaded_asset(instance, False)
     return instance
+
+
+def build_icon_material():
+    """HUD icons with the same palette swap as M_ArenaSprite, for the wave banner."""
+    material = fresh_material("M_UIIcon")
+    material.set_editor_property("material_domain", unreal.MaterialDomain.MD_UI)
+    material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+
+    texture = MEL.create_material_expression(material, unreal.MaterialExpressionTextureObjectParameter, -600, -200)
+    texture.set_editor_property("parameter_name", "IconTexture")
+    texture.set_editor_property("texture", unreal.load_asset(f"{ART}/Pyro_Run_0"))
+    uv = MEL.create_material_expression(material, unreal.MaterialExpressionTextureCoordinate, -600, -50)
+    shadow = vector_param(material, "PaletteShadow", unreal.LinearColor(0, 0, 0, 1), 100)
+    light = vector_param(material, "PaletteLight", unreal.LinearColor(1, 1, 1, 1), 250)
+    strength = scalar_param(material, "PaletteStrength", 0.0, 400)
+
+    node = custom_node(material, ICON_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT4,
+                       ["Tex", "UV", "PaletteShadow", "PaletteLight", "PaletteStrength"], -300)
+    for source, pin in ((texture, "Tex"), (uv, "UV"), (shadow, "PaletteShadow"), (light, "PaletteLight"), (strength, "PaletteStrength")):
+        MEL.connect_material_expressions(source, "", node, pin)
+    MEL.connect_material_property(mask(material, node, "rgb", -100, -50), "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    MEL.connect_material_property(mask(material, node, "a", -100, 100), "", unreal.MaterialProperty.MP_OPACITY)
+    MEL.recompile_material(material)
+    EAL.save_loaded_asset(material, False)
+    return material
 
 
 def build_fog_material():
@@ -393,7 +425,9 @@ def main():
     hud = blueprint("BP_ArenaHUD", unreal.ArenaHUD)
     set_defaults(hud, panel_texture=unreal.load_asset(f"{ART}/UI_Panel"),
                  button_texture=unreal.load_asset(f"{ART}/UI_Button"),
-                 backdrop_texture=unreal.load_asset(f"{ART}/UI_Backdrop"))
+                 backdrop_texture=unreal.load_asset(f"{ART}/UI_Backdrop"),
+                 skull_texture=unreal.load_asset(f"{ART}/UI_Skull"),
+                 icon_material=build_icon_material())
     import_music()
     chiptune = unreal.load_asset("/Game/Audio/chiptune-police_loop")
     theme_music = {"Dungeon": chiptune, "Space": chiptune, "NikkiWorld": chiptune}

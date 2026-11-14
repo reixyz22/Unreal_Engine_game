@@ -23,7 +23,8 @@ public:
 
 	virtual void Tick(float DeltaTime) override;
 
-	bool ReceiveDamage(float Amount);
+	// Source is the spell that hit (a chain throw, a Q burst), for combo scoring.
+	bool ReceiveDamage(float Amount, const UObject* Source = nullptr);
 	float GetRadius() const;
 	void SetHovered(bool bHovered);
 	UPaperSprite* GetIcon() const;
@@ -64,4 +65,6 @@ protected:
 private:
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> BodyMaterial;
+
+	TWeakObjectPtr<const UObject> LastHitBy;
 };

@@ -16,6 +16,7 @@ A top-down wave-survival arena game in Unreal Engine 5.8, built with C++ and Pap
 - Nikki's Q: costs 1 mana. She swings the guitar to her front and strums, and a comic-book burst (`AArenaShockwave`) expands across the screen, hitting every enemy once and erasing beads it passes over.
 - `UArenaTheme`: each run picks a random theme (music, floor, fog, enemy palette swaps) from Blueprint subclasses. Player characters and the HUD stay fixed for readability.
 - `UArenaSession`: a game-instance subsystem that survives restarts. It holds the chosen hero, the volume settings and the music, and plays every sound effect.
+- Score: kills chained by one spell (a chain throw or a Q burst) double in value and call out COOL, RADICAL, FANTASTIC, SPECTACULAR, LEGENDARY. Fast wave clears add a bonus. On death there's a YOU DIED / Continue screen and a saved top-10 leaderboard with arcade initials (`UArenaLeaderboard`).
 - `UHealthComponent`: shared by Nikki and Pyros; health plus i-frames so converging hits can't stack in one moment.
 - `AArenaGameMode`: plans each wave from a list of enemy types, spawns it at the arena edges, grows it every round, and restarts when Nikki falls.
 - `AArenaHUD`: health bars, the wave banner, the Q slot with mana pips, stun stars, notched health bars that ease down, a hero select and how-to-play screen on launch, and the Esc pause menu (music and effects sliders, click-to-move and fog toggles), drawn on the canvas from C++.

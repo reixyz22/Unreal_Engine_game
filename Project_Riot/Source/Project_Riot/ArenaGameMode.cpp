@@ -17,7 +17,12 @@
 namespace
 {
 	constexpr float CheckInterval = 0.5f;
-	constexpr float RestartDelay = 3.f;
+	constexpr int32 MaxComboTier = 5;
+	constexpr double PopupSeconds = 1.2;
+	// Wave bonus: points per wave number, plus points for every second under par.
+	constexpr int32 WaveBonusPerRound = 100;
+	constexpr double WaveParSeconds = 60.0;
+	constexpr int32 PointsPerSecondUnderPar = 10;
 	constexpr int32 SpawnAttempts = 8;
 }
 
@@ -30,10 +35,15 @@ void AArenaGameMode::InitGame(const FString& MapName, const FString& Options, FS
 {
 	Super::InitGame(MapName, Options, ErrorMessage);
 
-	// Shuffle bag of one: any theme except the one just played.
+	// The first run of a launch is always the first theme (the plain dungeon);
+	// after that, any theme except the one just played.
 	UArenaSession* Session = UArenaSession::Get(this);
 	TArray<TSubclassOf<UArenaTheme>> Choices = Themes;
-	if (Session && Choices.Num() > 1)
+	if (Session && !Session->LastTheme && !Choices.IsEmpty())
+	{
+		Choices = { Choices[0] };
+	}
+	else if (Session && Choices.Num() > 1)
 	{
 		Choices.Remove(Session->LastTheme.Get());
 	}
@@ -112,6 +122,10 @@ void AArenaGameMode::CheckWave()
 	{
 		return;
 	}
+	if (Round > 0)
+	{
+		AwardWaveBonus();
+	}
 
 	PlanWave();
 	bWaveQueued = true;
@@ -159,6 +173,7 @@ void AArenaGameMode::StartNextWave()
 {
 	bWaveQueued = false;
 	++Round;
+	WaveStartedAt = GetWorld()->GetTimeSeconds();
 
 	for (const FWaveGroup& Group : Wave)
 	{
@@ -207,8 +222,37 @@ int32 AArenaGameMode::CountEnemies() const
 
 void AArenaGameMode::OnPlayerDied()
 {
+	// The HUD shows the death screen; Continue there calls RestartArena.
 	bPlayerDead = true;
-	GetWorldTimerManager().SetTimer(RestartTimer, this, &AArenaGameMode::RestartArena, RestartDelay, false);
+}
+
+void AArenaGameMode::OnEnemyKilled(const AArenaEnemy& Enemy, const UObject* Source)
+{
+	if (bPlayerDead)
+	{
+		return;
+	}
+
+	// Mario-style doubling: 100, 200, 400 ... for each extra kill by the same spell.
+	const int32 KillsInCombo = Source ? ++KillsBySource.FindOrAdd(Source) : 1;
+	const int32 Points = 100 << FMath::Min(KillsInCombo - 1, MaxComboTier);
+	Score += Points;
+
+	const double Now = GetWorld()->GetTimeSeconds();
+	Popups.RemoveAll([Now](const FScorePopup& Popup) { return Now - Popup.Time > PopupSeconds; });
+	Popups.Add({ Enemy.GetActorLocation(), FMath::Min(KillsInCombo - 1, MaxComboTier), Points, Now });
+}
+
+void AArenaGameMode::AwardWaveBonus()
+{
+	const double Seconds = GetWorld()->GetTimeSeconds() - WaveStartedAt;
+	Score += Round * WaveBonusPerRound + FMath::Max(0, FMath::RoundToInt32(WaveParSeconds - Seconds)) * PointsPerSecondUnderPar;
+	KillsBySource.Reset();
+}
+
+const FEnemySkin* AArenaGameMode::GetEnemySkin(TSubclassOf<AArenaEnemy> Type) const
+{
+	return Type ? Theme->FindSkin(Type) : nullptr;
 }
 
 void AArenaGameMode::RestartArena()

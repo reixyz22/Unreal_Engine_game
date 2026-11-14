@@ -26,6 +26,15 @@ struct FEnemySpawnRule
 	float Weight = 1.f;
 };
 
+// A "COOL!"-style callout over a kill, for the HUD to draw.
+struct FScorePopup
+{
+	FVector Where = FVector::ZeroVector;
+	int32 Tier = 0;  // 0 = plain kill, 1..5 = COOL .. LEGENDARY
+	int32 Points = 0;
+	double Time = 0.0;
+};
+
 USTRUCT()
 struct FWaveGroup
 {
@@ -46,6 +55,14 @@ public:
 	AArenaGameMode();
 
 	void OnPlayerDied();
+	void RestartArena();
+
+	// Score: kills by the same spell (one chain throw, one Q burst) chain into combos,
+	// and clearing a wave quickly adds a bonus. Resets every run.
+	void OnEnemyKilled(const AArenaEnemy& Enemy, const UObject* Source);
+	int32 GetScore() const { return Score; }
+	const TArray<FScorePopup>& GetPopups() const { return Popups; }
+	const struct FEnemySkin* GetEnemySkin(TSubclassOf<AArenaEnemy> Type) const;
 
 	// The run's theme, picked at random before anything else begins play.
 	const UArenaTheme& GetTheme() const { return *Theme; }
@@ -72,7 +89,7 @@ private:
 	void StartNextWave();
 	FVector PickSpawnPoint() const;
 	int32 CountEnemies() const;
-	void RestartArena();
+	void AwardWaveBonus();
 
 	// Playable heroes, shown on the start screen.
 	UPROPERTY(EditDefaultsOnly, Category = "Heroes")
@@ -113,7 +130,11 @@ private:
 	bool bWaveQueued = false;
 	bool bPlayerDead = false;
 
+	int32 Score = 0;
+	double WaveStartedAt = 0.0;
+	TMap<TWeakObjectPtr<const UObject>, int32> KillsBySource;
+	TArray<FScorePopup> Popups;
+
 	FTimerHandle CheckTimer;
 	FTimerHandle WaveTimer;
-	FTimerHandle RestartTimer;
 };

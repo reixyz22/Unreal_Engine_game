@@ -68,8 +68,9 @@ void AArenaEnemy::Tick(float DeltaTime)
 	Body->SetSpriteColor(Health->IsInvulnerable() ? HitFlash : Tint);
 }
 
-bool AArenaEnemy::ReceiveDamage(float Amount)
+bool AArenaEnemy::ReceiveDamage(float Amount, const UObject* Source)
 {
+	LastHitBy = Source;
 	return Health->ApplyDamage(Amount);
 }
 
@@ -113,5 +114,9 @@ void AArenaEnemy::MoveWithinArena(const FVector& Offset)
 
 void AArenaEnemy::Die()
 {
+	if (AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>())
+	{
+		GameMode->OnEnemyKilled(*this, LastHitBy.Get());
+	}
 	Destroy();
 }

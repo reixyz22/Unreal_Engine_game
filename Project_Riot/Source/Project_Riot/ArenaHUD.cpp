@@ -1,7 +1,9 @@
 #include "ArenaHUD.h"
 
+#include "ArenaArt.h"
 #include "ArenaEnemy.h"
 #include "ArenaGameMode.h"
+#include "ArenaLeaderboard.h"
 #include "ArenaPlayerPawn.h"
 #include "ArenaSession.h"
 #include "ArenaTheme.h"
@@ -11,6 +13,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "HealthComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "PaperFlipbookComponent.h"
@@ -34,6 +37,28 @@ namespace
 	constexpr float UiScale = 3.f;
 	constexpr float PanelCorner = 8.f;
 	constexpr float ButtonCorner = 4.f;
+	constexpr double DeathScreenDelay = 1.2;
+	constexpr double FadeInSeconds = 0.8;
+	constexpr double PopupSeconds = 1.2;
+
+	// Combo callouts, in rainbow order.
+	const TCHAR* const ComboWords[] = { TEXT(""), TEXT("COOL!"), TEXT("RADICAL!"), TEXT("FANTASTIC!"), TEXT("SPECTACULAR!"), TEXT("LEGENDARY!") };
+	const FLinearColor ComboColors[] = {
+		FLinearColor::White, FLinearColor(1.f, 0.25f, 0.25f), FLinearColor(1.f, 0.6f, 0.15f),
+		FLinearColor(1.f, 0.95f, 0.2f), FLinearColor(0.3f, 1.f, 0.4f), FLinearColor(0.45f, 0.6f, 1.f) };
+
+	const TCHAR* const CreditLines[] = {
+		TEXT("Game developer and code auditor  -  William \"reixyz\" Pitts"),
+		TEXT("Spaceman and guitar art  -  William \"reixyz\" Pitts"),
+		TEXT("AI pair programmer (UI, art and audio tools, engine glue)  -  Claude by Anthropic"),
+		TEXT("Nikki  -  KingBell, Pixel Art Sprite Mixer (CC BY 4.0)"),
+		TEXT("Pyros, Clerics, dungeon floor  -  0x72, DungeonTileset II (CC0)"),
+		TEXT("Flail  -  Dungeon Crawl Stone Soup (CC0)"),
+		TEXT("Cursors  -  Kenney, Cursor Pixel Pack (CC0)"),
+		TEXT("Music  -  obscure music, yd, wipics (CC0)"),
+		TEXT("Sound effects  -  synthesized for this game"),
+		TEXT("Built with Unreal Engine 5.8"),
+	};
 	constexpr float HealthPerNotch = 10.f;
 	const FLinearColor WaveYellow(1.f, 0.85f, 0.2f);
 	constexpr float OverheadBarWidth = 56.f;
@@ -57,7 +82,12 @@ void AArenaHUD::BeginPlay()
 
 	// The start screens show once per launch; restarts after a death go straight to play.
 	const UArenaSession* Session = UArenaSession::Get(this);
-	ShowScreen(Session && !Session->bIntroDone ? EScreen::ChooseHero : EScreen::Playing);
+	const bool bIntro = Session && !Session->bIntroDone;
+	ShowScreen(bIntro ? EScreen::ChooseHero : EScreen::Playing);
+	if (!bIntro)
+	{
+		FadeInFrom = GetWorld()->GetRealTimeSeconds();
+	}
 }
 
 void AArenaHUD::Tick(float DeltaSeconds)
@@ -91,9 +121,34 @@ void AArenaHUD::Tick(float DeltaSeconds)
 		}
 		break;
 	case EScreen::Playing:
-		if (bPauseKey)
+	{
+		const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+		if (GameMode && GameMode->IsPlayerDead())
+		{
+			// Let the death read for a moment, then the death screen.
+			const double Now = GetWorld()->GetRealTimeSeconds();
+			DeathNoticedAt = DeathNoticedAt < 0.0 ? Now : DeathNoticedAt;
+			if (Now - DeathNoticedAt > DeathScreenDelay)
+			{
+				Board = UArenaLeaderboard::Load();
+				ShowScreen(Board->Qualifies(GameMode->GetScore()) ? EScreen::Initials : EScreen::GameOver);
+			}
+		}
+		else if (bPauseKey)
 		{
 			ShowScreen(EScreen::Paused);
+		}
+		break;
+	}
+	case EScreen::Initials:
+		TickInitials();
+		break;
+	case EScreen::GameOver:
+	case EScreen::Leaderboard:
+	case EScreen::Credits:
+		if (bClicked)
+		{
+			ClickMenu(GetMouse());
 		}
 		break;
 	case EScreen::Paused:
@@ -123,7 +178,8 @@ void AArenaHUD::DrawHUD()
 	if (GameMode)
 	{
 		DrawWaveBanner(*GameMode);
-		DrawDeathBanner(*GameMode);
+		DrawPopups(*GameMode);
+		DrawScore(*GameMode);
 	}
 	if (const AArenaPlayerPawn* Hero = Cast<AArenaPlayerPawn>(GetOwningPawn()))
 	{
@@ -135,7 +191,18 @@ void AArenaHUD::DrawHUD()
 	case EScreen::ChooseHero: DrawHeroSelect(); break;
 	case EScreen::Controls: DrawControls(); break;
 	case EScreen::Paused: DrawPauseMenu(); break;
+	case EScreen::GameOver: DrawGameOver(); break;
+	case EScreen::Initials: DrawInitials(); break;
+	case EScreen::Leaderboard: DrawLeaderboard(); break;
+	case EScreen::Credits: DrawCredits(); break;
 	default: break;
+	}
+
+	// Restarts fade in from black so a new run reads as a continuation, not a cut.
+	const double SinceFade = GetWorld()->GetRealTimeSeconds() - FadeInFrom;
+	if (FadeInFrom >= 0.0 && SinceFade < FadeInSeconds)
+	{
+		DrawRect(FLinearColor(0.f, 0.f, 0.f, 1.f - float(SinceFade / FadeInSeconds)), 0.f, 0.f, Canvas->ClipX, Canvas->ClipY);
 	}
 }
 
@@ -173,14 +240,13 @@ void AArenaHUD::DrawWaveBanner(const AArenaGameMode& GameMode)
 	}
 
 	// Lay out "WAVE 3 [ icon x2 + icon x3 ]" left to right, measured first so it can be centered.
-	struct FPiece { FString Text; UTexture2D* Icon = nullptr; };
+	struct FPiece { FString Text; TSubclassOf<AArenaEnemy> Icon; };
 	TArray<FPiece> Pieces;
 	Pieces.Add({ FString::Printf(TEXT("%sWAVE %d  [ "), GameMode.IsWaveIncoming() ? TEXT("INCOMING  ") : TEXT(""), GameMode.GetBannerWave()) });
 	const TArray<FWaveGroup>& Groups = GameMode.GetBannerGroups();
 	for (int32 Index = 0; Index < Groups.Num(); ++Index)
 	{
-		const UPaperSprite* Icon = GameMode.GetEnemyIcon(Groups[Index].Type);
-		Pieces.Add({ FString(), Icon ? Icon->GetBakedTexture() : nullptr });
+		Pieces.Add({ FString(), Groups[Index].Type });
 		Pieces.Add({ FString::Printf(TEXT("x%d%s"), Groups[Index].Count, Index + 1 < Groups.Num() ? TEXT("  +  ") : TEXT("")) });
 	}
 	Pieces.Add({ TEXT(" ]") });
@@ -204,8 +270,7 @@ void AArenaHUD::DrawWaveBanner(const AArenaGameMode& GameMode)
 	{
 		if (Piece.Icon)
 		{
-			const float IconY = BannerTop + (TextHeight - IconSize) * 0.5f;
-			DrawTexture(Piece.Icon, X, IconY, IconSize, IconSize, 0.f, 0.f, 1.f, 1.f, FLinearColor::White, BLEND_Translucent);
+			DrawEnemyIcon(GameMode, Piece.Icon, X, BannerTop + (TextHeight - IconSize) * 0.5f, IconSize);
 			X += IconSize;
 			continue;
 		}
@@ -221,12 +286,13 @@ void AArenaHUD::DrawSpecialsBar(const AArenaPlayerPawn& Hero)
 {
 	// Bottom-middle bar of special slots (Q for now), each with its key and mana pips.
 	// Health is already over Nikki's head, and the camera keeps her centred.
-	constexpr float Slot = 96.f;
+	constexpr float Slot = 120.f;       // slots are wide and short
+	constexpr float SlotHeight = 76.f;
 	constexpr float Pip = 14.f;
 	constexpr float Padding = 18.f;
 	const int32 Slots = 1;
 	const float BarWidth = Slots * Slot + Padding * 2.f;
-	const float BarHeight = Slot + Pip + Padding * 2.f + 10.f;
+	const float BarHeight = SlotHeight + Pip + Padding * 2.f + 10.f;
 	const float BarX = (Canvas->ClipX - BarWidth) * 0.5f;
 	const float BarY = Canvas->ClipY - BarHeight - 12.f;
 	if (PanelTexture)
@@ -241,11 +307,11 @@ void AArenaHUD::DrawSpecialsBar(const AArenaPlayerPawn& Hero)
 	const float X = BarX + Padding;
 	const float Y = BarY + Padding;
 	const bool bReady = Hero.GetMana() >= Hero.GetSpecialCost();
-	DrawRect(BarBacking, X, Y, Slot, Slot);
+	DrawRect(BarBacking, X, Y, Slot, SlotHeight);
 	if (const UPaperSprite* Icon = Hero.GetSpecialIcon())
 	{
 		const FLinearColor Shade = bReady ? FLinearColor::White : FLinearColor(0.35f, 0.35f, 0.4f);
-		DrawTexture(Icon->GetBakedTexture(), X + 10.f, Y + 10.f, Slot - 20.f, Slot - 20.f, 0.f, 0.f, 1.f, 1.f, Shade, BLEND_Translucent);
+		DrawTexture(Icon->GetBakedTexture(), X + 14.f, Y + 8.f, Slot - 28.f, SlotHeight - 16.f, 0.f, 0.f, 1.f, 1.f, Shade, BLEND_Translucent);
 	}
 	DrawText(TEXT("Q"), Gold, X + 6.f, Y + 4.f, GetMenuFont(), 1.f);
 
@@ -253,7 +319,7 @@ void AArenaHUD::DrawSpecialsBar(const AArenaPlayerPawn& Hero)
 	for (int32 Index = 0; Index < Hero.GetMaxMana(); ++Index)
 	{
 		const float PipX = X + (Slot - PipsWidth) * 0.5f + Index * (Pip + 6.f);
-		const float PipY = Y + Slot + 10.f;
+		const float PipY = Y + SlotHeight + 10.f;
 		DrawRect(ManaBlue, PipX, PipY, Pip, Pip);
 		if (Index >= Hero.GetMana())
 		{
@@ -277,17 +343,6 @@ void AArenaHUD::DrawStunStars(const AArenaPlayerPawn& Hero)
 		const float Angle = Spin + Star * UE_TWO_PI / 3.f;
 		DrawRect(WaveYellow, Screen.X + FMath::Cos(Angle) * 16.f - 3.f, Screen.Y + FMath::Sin(Angle) * 5.f - 3.f, 6.f, 6.f);
 	}
-}
-
-void AArenaHUD::DrawDeathBanner(const AArenaGameMode& GameMode)
-{
-	if (!GameMode.IsPlayerDead())
-	{
-		return;
-	}
-	DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.5f), 0.f, 0.f, Canvas->ClipX, Canvas->ClipY);
-	DrawCentered(FString::Printf(TEXT("ROUNDS SURVIVED: %d"), GameMode.GetRoundsSurvived()),
-		Canvas->ClipX * 0.5f, Canvas->ClipY * 0.45f, WaveYellow, 2.f);
 }
 
 void AArenaHUD::DrawHealthBar(const UHealthComponent& Health, float X, float Y, float Width, float Height)
@@ -371,7 +426,7 @@ UFont* AArenaHUD::GetMenuFont() const
 void AArenaHUD::DrawPanel(float X, float Y, float Width, float Height, const FString& Title)
 {
 	// The start screens hide the stage entirely; the pause menu dims it and takes the theme's tint.
-	const bool bStartScreen = CurrentScreen != EScreen::Paused;
+	const bool bStartScreen = CurrentScreen == EScreen::ChooseHero || CurrentScreen == EScreen::Controls;
 	if (bStartScreen && BackdropTexture)
 	{
 		const float Tile = BackdropTexture->GetSizeX() * UiScale;
@@ -531,6 +586,7 @@ void AArenaHUD::DrawPauseMenu()
 		FBox2D(), [Hero]() { Hero->SetClickToMove(!Hero->IsClickToMove()); } });
 	MenuButtons.Add({ FString::Printf(TEXT("Fog: %s"), Hero->IsFogEnabled() ? TEXT("On") : TEXT("Off")),
 		FBox2D(), [Hero]() { Hero->SetFogEnabled(!Hero->IsFogEnabled()); } });
+	MenuButtons.Add({ TEXT("Credits"), FBox2D(), [this]() { CreditsReturnTo = EScreen::Paused; ShowScreen(EScreen::Credits); } });
 	MenuButtons.Add({ TEXT("Quit"), FBox2D(), [this]() { UKismetSystemLibrary::QuitGame(this, PlayerOwner, EQuitPreference::Quit, false); } });
 
 	MenuSliders.Reset();
@@ -585,6 +641,229 @@ void AArenaHUD::DragSliders(const FVector2D& Mouse)
 			Slider.Set((Mouse.X - Slider.Track.Min.X) / Slider.Track.GetSize().X);
 		}
 	}
+}
+
+void AArenaHUD::DrawEnemyIcon(const AArenaGameMode& GameMode, TSubclassOf<AArenaEnemy> Type, float X, float Y, float Size)
+{
+	const UPaperSprite* Sprite = GameMode.GetEnemyIcon(Type);
+	UTexture2D* Texture = Sprite ? Sprite->GetBakedTexture() : nullptr;
+	if (!Texture)
+	{
+		return;
+	}
+
+	// Recolored themes draw the icon through the same palette swap the enemies use.
+	const FEnemySkin* Skin = GameMode.GetEnemySkin(Type);
+	if (!IconMaterial || !Skin || Skin->Strength <= 0.f)
+	{
+		DrawTexture(Texture, X, Y, Size, Size, 0.f, 0.f, 1.f, 1.f, FLinearColor::White, BLEND_Translucent);
+		return;
+	}
+	TObjectPtr<UMaterialInstanceDynamic>& Material = IconMaterials.FindOrAdd(Type);
+	if (!Material)
+	{
+		Material = UMaterialInstanceDynamic::Create(IconMaterial, this);
+		Material->SetTextureParameterValue(TEXT("IconTexture"), Texture);
+		Material->SetVectorParameterValue(ArenaArt::PaletteShadowParam, Skin->Shadow);
+		Material->SetVectorParameterValue(ArenaArt::PaletteLightParam, Skin->Light);
+		Material->SetScalarParameterValue(ArenaArt::PaletteStrengthParam, Skin->Strength);
+	}
+	DrawMaterial(Material, X, Y, Size, Size, 0.f, 0.f, 1.f, 1.f);
+}
+
+void AArenaHUD::DrawScore(const AArenaGameMode& GameMode)
+{
+	const FString Text = FString::Printf(TEXT("SCORE  %s"), *FText::AsNumber(GameMode.GetScore()).ToString());
+	float W, H;
+	GetTextSize(Text, W, H, GEngine->GetLargeFont(), BannerScale);
+	DrawText(Text, FLinearColor(0.f, 0.f, 0.f, 0.8f), Canvas->ClipX - W - 22.f, BannerTop + 2.f, GEngine->GetLargeFont(), BannerScale);
+	DrawText(Text, WaveYellow, Canvas->ClipX - W - 24.f, BannerTop, GEngine->GetLargeFont(), BannerScale);
+}
+
+void AArenaHUD::DrawPopups(const AArenaGameMode& GameMode)
+{
+	// Each kill floats its points up; kills chained by one spell call out COOL .. LEGENDARY.
+	const double Now = GetWorld()->GetTimeSeconds();
+	for (const FScorePopup& Popup : GameMode.GetPopups())
+	{
+		const float Age = float(Now - Popup.Time);
+		if (Age > PopupSeconds)
+		{
+			continue;
+		}
+		const FVector Screen = Project(Popup.Where + FVector(0.0, 0.0, 60.0 + Age * 70.0));
+		FLinearColor Color = ComboColors[Popup.Tier];
+		Color.A = 1.f - Age / float(PopupSeconds);
+		const float Scale = 1.f + Popup.Tier * 0.2f;
+		const FString Text = Popup.Tier > 0
+			? FString::Printf(TEXT("%s +%d"), ComboWords[Popup.Tier], Popup.Points)
+			: FString::Printf(TEXT("+%d"), Popup.Points);
+		DrawCentered(Text, Screen.X + 2.f, Screen.Y + 2.f, FLinearColor(0.f, 0.f, 0.f, Color.A * 0.8f), Scale);
+		DrawCentered(Text, Screen.X, Screen.Y, Color, Scale);
+	}
+}
+
+void AArenaHUD::DrawMenuButtons(float X, float Y, float Width)
+{
+	constexpr float ButtonHeight = 56.f;
+	constexpr float Gap = 14.f;
+	const FVector2D Mouse = GetMouse();
+	for (FMenuButton& Button : MenuButtons)
+	{
+		Button.Rect = FBox2D(FVector2D(X, Y), FVector2D(X + Width, Y + ButtonHeight));
+		DrawButton(Button, Mouse);
+		Y += ButtonHeight + Gap;
+	}
+}
+
+void AArenaHUD::DrawGameOver()
+{
+	const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+	if (!GameMode)
+	{
+		return;
+	}
+
+	MenuButtons.Reset();
+	MenuButtons.Add({ TEXT("Continue"), FBox2D(), [this]()
+	{
+		if (AArenaGameMode* Mode = GetWorld()->GetAuthGameMode<AArenaGameMode>())
+		{
+			Mode->RestartArena();
+		}
+	} });
+	MenuButtons.Add({ TEXT("Leaderboard"), FBox2D(), [this]() { ShowScreen(EScreen::Leaderboard); } });
+	MenuButtons.Add({ TEXT("Credits"), FBox2D(), [this]() { CreditsReturnTo = EScreen::GameOver; ShowScreen(EScreen::Credits); } });
+	MenuButtons.Add({ TEXT("Quit"), FBox2D(), [this]() { UKismetSystemLibrary::QuitGame(this, PlayerOwner, EQuitPreference::Quit, false); } });
+
+	constexpr float Width = 440.f;
+	const float Height = 330.f + MenuButtons.Num() * 70.f;
+	const float X = (Canvas->ClipX - Width) * 0.5f;
+	const float Y = (Canvas->ClipY - Height) * 0.5f;
+	DrawPanel(X, Y, Width, Height, TEXT("YOU DIED"));
+
+	if (SkullTexture)
+	{
+		constexpr float Skull = 96.f;
+		DrawTexture(SkullTexture, (Canvas->ClipX - Skull) * 0.5f, Y + 100.f, Skull, Skull, 0.f, 0.f, 1.f, 1.f, FLinearColor::White, BLEND_Translucent);
+	}
+	DrawCentered(FString::Printf(TEXT("Score %s   -   Wave %d"), *FText::AsNumber(GameMode->GetScore()).ToString(), GameMode->GetRoundsSurvived()),
+		Canvas->ClipX * 0.5f, Y + 214.f, Parchment, 1.2f, GetMenuFont());
+	DrawCentered(TEXT("Continue?"), Canvas->ClipX * 0.5f, Y + 256.f, Gold, 1.5f, GetMenuFont());
+	DrawMenuButtons((Canvas->ClipX - 360.f) * 0.5f, Y + 310.f, 360.f);
+}
+
+void AArenaHUD::TickInitials()
+{
+	// Arcade entry: W/S change the letter, A/D move, Enter saves.
+	auto Pressed = [this](const FKey& A, const FKey& B) { return PlayerOwner->WasInputKeyJustPressed(A) || PlayerOwner->WasInputKeyJustPressed(B); };
+	TCHAR& Letter = Initials[InitialsCursor];
+	if (Pressed(EKeys::W, EKeys::Up))
+	{
+		Letter = Letter == 'Z' ? 'A' : Letter + 1;
+	}
+	if (Pressed(EKeys::S, EKeys::Down))
+	{
+		Letter = Letter == 'A' ? 'Z' : Letter - 1;
+	}
+	if (Pressed(EKeys::D, EKeys::Right))
+	{
+		InitialsCursor = FMath::Min(InitialsCursor + 1, 2);
+	}
+	if (Pressed(EKeys::A, EKeys::Left))
+	{
+		InitialsCursor = FMath::Max(InitialsCursor - 1, 0);
+	}
+	if (Pressed(EKeys::Enter, EKeys::SpaceBar))
+	{
+		const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+		const FString Name(3, Initials);
+		Board->Add(Name, GameMode->GetScore(), GameMode->GetRoundsSurvived());
+		Board->Save();
+		NewEntryRank = Board->Entries.IndexOfByPredicate([&](const FLeaderboardEntry& Entry)
+		{
+			return Entry.Initials == Name && Entry.Score == GameMode->GetScore();
+		});
+		ShowScreen(EScreen::Leaderboard);
+	}
+}
+
+void AArenaHUD::DrawInitials()
+{
+	constexpr float Width = 520.f;
+	constexpr float Height = 330.f;
+	const float X = (Canvas->ClipX - Width) * 0.5f;
+	const float Y = (Canvas->ClipY - Height) * 0.5f;
+	DrawPanel(X, Y, Width, Height, TEXT("NEW HIGH SCORE!"));
+
+	constexpr float Box = 64.f;
+	const float LettersX = (Canvas->ClipX - 3.f * (Box + 16.f) + 16.f) * 0.5f;
+	const float Blink = 0.6f + 0.4f * FMath::Sin(GetWorld()->GetRealTimeSeconds() * 8.f);
+	for (int32 Index = 0; Index < 3; ++Index)
+	{
+		const float BoxX = LettersX + Index * (Box + 16.f);
+		const bool bActive = Index == InitialsCursor;
+		DrawBox(BoxX, Y + 110.f, Box, Box, BarBacking, bActive ? Gold * Blink : Ink, 3.f);
+		DrawCentered(FString(1, &Initials[Index]), BoxX + Box * 0.5f, Y + 118.f, Gold, 2.f, GetMenuFont());
+	}
+	DrawCentered(TEXT("W / S  letter     A / D  move     Enter  save"), Canvas->ClipX * 0.5f, Y + 210.f, Parchment, 1.f, GetMenuFont());
+}
+
+void AArenaHUD::DrawLeaderboard()
+{
+	MenuButtons.Reset();
+	MenuButtons.Add({ TEXT("Back"), FBox2D(), [this]() { ShowScreen(EScreen::GameOver); } });
+
+	constexpr float Width = 520.f;
+	constexpr float Row = 30.f;
+	const float Height = 120.f + UArenaLeaderboard::MaxEntries * Row + 100.f;
+	const float X = (Canvas->ClipX - Width) * 0.5f;
+	const float Y = (Canvas->ClipY - Height) * 0.5f;
+	DrawPanel(X, Y, Width, Height, TEXT("LEADERBOARD"));
+
+	if (!Board)
+	{
+		Board = UArenaLeaderboard::Load();
+	}
+	for (int32 Rank = 0; Rank < UArenaLeaderboard::MaxEntries; ++Rank)
+	{
+		const float RowY = Y + 104.f + Rank * Row;
+		const FLinearColor Color = Rank == NewEntryRank ? Gold : Parchment;
+		DrawText(FString::Printf(TEXT("%2d."), Rank + 1), Color, X + 50.f, RowY, GetMenuFont(), 1.1f);
+		if (Board->Entries.IsValidIndex(Rank))
+		{
+			const FLeaderboardEntry& Entry = Board->Entries[Rank];
+			DrawText(Entry.Initials, Color, X + 110.f, RowY, GetMenuFont(), 1.1f);
+			DrawText(FText::AsNumber(Entry.Score).ToString(), Color, X + 210.f, RowY, GetMenuFont(), 1.1f);
+			DrawText(FString::Printf(TEXT("wave %d"), Entry.Wave), Color, X + 370.f, RowY, GetMenuFont(), 1.1f);
+		}
+		else
+		{
+			DrawText(TEXT("---"), Color * 0.6f, X + 110.f, RowY, GetMenuFont(), 1.1f);
+		}
+	}
+	DrawMenuButtons((Canvas->ClipX - 240.f) * 0.5f, Y + Height - 80.f, 240.f);
+}
+
+void AArenaHUD::DrawCredits()
+{
+	MenuButtons.Reset();
+	MenuButtons.Add({ TEXT("Back"), FBox2D(), [this]() { ShowScreen(CreditsReturnTo); } });
+
+	constexpr float Row = 34.f;
+	const float Width = FMath::Min(900.f, Canvas->ClipX - 40.f);
+	const float Height = 120.f + UE_ARRAY_COUNT(CreditLines) * Row + 100.f;
+	const float X = (Canvas->ClipX - Width) * 0.5f;
+	const float Y = (Canvas->ClipY - Height) * 0.5f;
+	DrawPanel(X, Y, Width, Height, TEXT("CREDITS"));
+
+	float RowY = Y + 104.f;
+	for (const TCHAR* Line : CreditLines)
+	{
+		DrawCentered(Line, Canvas->ClipX * 0.5f, RowY, Parchment, 1.f, GetMenuFont());
+		RowY += Row;
+	}
+	DrawMenuButtons((Canvas->ClipX - 240.f) * 0.5f, Y + Height - 80.f, 240.f);
 }
 
 void AArenaHUD::DrawCentered(const FString& Text, float CenterX, float Y, const FLinearColor& Color, float Scale, UFont* Font)
