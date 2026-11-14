@@ -12,12 +12,15 @@ MEL = unreal.MaterialEditingLibrary
 EAL = unreal.EditorAssetLibrary
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 
+# Theme tracks, imported separately; until they exist every theme plays the chiptune loop.
+THEME_MUSIC = {"Dungeon": "/Game/Audio/BGM_Dungeon", "Space": "/Game/Audio/BGM_Space"}
+
 # Not characters: no glow, no outline.
 PLAIN_SPRITES = {"T_ArenaFloor_Sprite", "T_Player_Sprite"}
 BRIGHT_SPRITES = {"Pyro_Bead_Sprite", "Flail_Ball_Sprite", "Cleric_Beam_Sprite", "Shock_Burst_Sprite",
                   "Shard_Mana_Sprite", "Shard_Health_Sprite"}
 # Frames from build_art.py that get a texture and a sprite here.
-FRAMES = ["Nikki_Guitar", "Cleric_Beam", "Shock_Burst", "Shard_Mana", "Shard_Health"] + [f"Cleric_Run_{i}" for i in range(4)]
+FRAMES = ["Nikki_Guitar", "Cleric_Beam", "Chain_Link", "Shock_Burst", "Shard_Mana", "Shard_Health"] + [f"Cleric_Run_{i}" for i in range(4)]
 
 SPRITE_HLSL = """
 float W, H;
@@ -29,7 +32,10 @@ N = max(N, Texture2DSample(Tex, TexSampler, UV - float2(Px.x, 0)).a);
 N = max(N, Texture2DSample(Tex, TexSampler, UV + float2(0, Px.y)).a);
 N = max(N, Texture2DSample(Tex, TexSampler, UV - float2(0, Px.y)).a);
 float Edge = saturate(N - C.a) * OutlineA;
-float3 Rgb = C.rgb * Tint * Glow;
+// Palette swap: brightness picks a color between Shadow and Light (a gradient map).
+float Luma = dot(C.rgb, float3(0.299, 0.587, 0.114));
+float3 Swapped = lerp(PaletteShadow, PaletteLight, Luma);
+float3 Rgb = lerp(C.rgb, Swapped, PaletteStrength) * Tint * Glow;
 return float4(lerp(Rgb, Outline, Edge), max(C.a * TintA, Edge));
 """
 
@@ -50,8 +56,8 @@ for (int I = 0; I < 4; I++)
     P = P * 2.07 + float2(5.2, 1.3);
     Amp *= 0.5;
 }
-float Fog = smoothstep(0.3, 0.85, N);
-return Scene.rgb * (1.0 - Fog * 0.35) + float3(0.45, 0.32, 0.7) * Fog * 0.12;
+float Fog = smoothstep(0.3, 0.85, N) * FogDensity;
+return Scene.rgb * (1.0 - Fog) + FogColor * Fog * 0.35;
 """
 
 
@@ -74,6 +80,20 @@ def custom_node(material, code, output_type, inputs, x):
         pin.set_editor_property("input_name", name)
         pins.append(pin)
     node.set_editor_property("inputs", pins)
+    return node
+
+
+def vector_param(material, name, default, y):
+    node = MEL.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -600, y)
+    node.set_editor_property("parameter_name", name)
+    node.set_editor_property("default_value", default)
+    return node
+
+
+def scalar_param(material, name, default, y):
+    node = MEL.create_material_expression(material, unreal.MaterialExpressionScalarParameter, -600, y)
+    node.set_editor_property("parameter_name", name)
+    node.set_editor_property("default_value", default)
     return node
 
 
@@ -102,12 +122,17 @@ def build_sprite_material():
     glow = MEL.create_material_expression(material, unreal.MaterialExpressionScalarParameter, -600, 350)
     glow.set_editor_property("parameter_name", "Glow")
     glow.set_editor_property("default_value", 1.35)
+    shadow = vector_param(material, "PaletteShadow", unreal.LinearColor(0, 0, 0, 1), 500)
+    light = vector_param(material, "PaletteLight", unreal.LinearColor(1, 1, 1, 1), 650)
+    strength = scalar_param(material, "PaletteStrength", 0.0, 800)
 
     node = custom_node(material, SPRITE_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT4,
-                       ["Tex", "UV", "Tint", "TintA", "Outline", "OutlineA", "Glow"], -300)
+                       ["Tex", "UV", "Tint", "TintA", "Outline", "OutlineA", "Glow",
+                        "PaletteShadow", "PaletteLight", "PaletteStrength"], -300)
     # Color pins carry RGB only, so each alpha comes in on its own pin.
     for source, out, pin in ((texture, "", "Tex"), (uv, "", "UV"), (tint, "", "Tint"), (tint, "A", "TintA"),
-                             (outline, "", "Outline"), (outline, "A", "OutlineA"), (glow, "", "Glow")):
+                             (outline, "", "Outline"), (outline, "A", "OutlineA"), (glow, "", "Glow"),
+                             (shadow, "", "PaletteShadow"), (light, "", "PaletteLight"), (strength, "", "PaletteStrength")):
         MEL.connect_material_expressions(source, out, node, pin)
 
     MEL.connect_material_property(mask(material, node, "rgb", -100, -50), "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
@@ -140,7 +165,12 @@ def build_fog_material():
     world = MEL.create_material_expression(material, unreal.MaterialExpressionWorldPosition, -600, 150)
     time = MEL.create_material_expression(material, unreal.MaterialExpressionTime, -600, 300)
 
-    node = custom_node(material, FOG_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT3, ["Scene", "WP", "Time"], -300)
+    fog_color = vector_param(material, "FogColor", unreal.LinearColor(0.45, 0.32, 0.7, 1), 450)
+    fog_density = scalar_param(material, "FogDensity", 0.35, 600)
+    node = custom_node(material, FOG_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT3,
+                       ["Scene", "WP", "Time", "FogColor", "FogDensity"], -300)
+    MEL.connect_material_expressions(fog_color, "", node, "FogColor")
+    MEL.connect_material_expressions(fog_density, "", node, "FogDensity")
     MEL.connect_material_expressions(scene, "Color", node, "Scene")
     MEL.connect_material_expressions(world, "", node, "WP")
     MEL.connect_material_expressions(time, "", node, "Time")
@@ -253,6 +283,41 @@ def spawn_rule(enemy_bp, first_round, weight):
     return rule
 
 
+def colour(r, g, b):
+    return unreal.LinearColor(r, g, b, 1.0)
+
+
+def skin(enemy_bp, shadow, light, strength):
+    entry = unreal.EnemySkin()
+    entry.set_editor_property("type", enemy_bp.generated_class())
+    entry.set_editor_property("shadow", shadow)
+    entry.set_editor_property("light", light)
+    entry.set_editor_property("strength", strength)
+    return entry
+
+
+def build_themes(pyro, cleric, music):
+    """One Blueprint per theme; each overrides only what differs from UArenaTheme's defaults."""
+    dungeon = blueprint("BP_Theme_Dungeon", unreal.ArenaTheme)
+    set_defaults(dungeon, display_name=unreal.Text("Dungeon"), music=music["Dungeon"],
+                 floor_tint=colour(0.85, 0.82, 0.78), fog_color=colour(0.8, 0.87, 1.0), fog_density=0.45)
+
+    space = blueprint("BP_Theme_Space", unreal.ArenaTheme)
+    set_defaults(space, display_name=unreal.Text("Space"), music=music["Space"],
+                 floor_tint=colour(0.3, 0.38, 0.72), fog_color=colour(0.08, 0.12, 0.38), fog_density=0.4,
+                 menu_wood=colour(0.05, 0.07, 0.16),
+                 enemy_skins=[skin(pyro, colour(0.05, 0.08, 0.22), colour(0.85, 0.95, 1.0), 0.9),
+                              skin(cleric, colour(0.02, 0.0, 0.02), colour(0.95, 0.1, 0.15), 0.95)])
+
+    nikki = blueprint("BP_Theme_NikkiWorld", unreal.ArenaTheme)
+    set_defaults(nikki, display_name=unreal.Text("Nikki's World"), music=music["NikkiWorld"],
+                 floor_tint=colour(0.62, 0.58, 0.74), fog_color=colour(0.45, 0.32, 0.7), fog_density=0.35,
+                 menu_wood=colour(0.16, 0.04, 0.12),
+                 enemy_skins=[skin(pyro, colour(0.01, 0.01, 0.02), colour(1.0, 0.2, 0.6), 0.85),
+                              skin(cleric, colour(0.01, 0.01, 0.02), colour(1.0, 0.2, 0.6), 0.85)])
+    return [dungeon, space, nikki]
+
+
 def blueprint(name, parent_class):
     path = f"{CORE}/{name}"
     if EAL.does_asset_exist(path):
@@ -292,15 +357,25 @@ def main():
                  beam_charge_sound=sounds["SFX_BeamCharge"], beam_fire_sound=sounds["SFX_BeamFire"])
     hud = blueprint("BP_ArenaHUD", unreal.ArenaHUD)
     set_defaults(hud)
+    chiptune = unreal.load_asset("/Game/Audio/chiptune-police_loop")
+    theme_music = {"Dungeon": chiptune, "Space": chiptune, "NikkiWorld": chiptune}
+    for name, path in THEME_MUSIC.items():
+        if EAL.does_asset_exist(path):
+            theme_music[name] = unreal.load_asset(path)
+    themes = build_themes(pyro, cleric, theme_music)
+    nikki_bp = unreal.load_asset(f"{CORE}/BP_ArenaPlayerPawn")
     # Pyros fill every wave; Clerics join from wave 3 at a fifth of the wave.
     set_defaults(unreal.load_asset(f"{CORE}/BP_ArenaGameMode"),
                  spawn_rules=[spawn_rule(pyro, 1, 4.0), spawn_rule(cleric, 3, 1.0)],
-                 hud_class=hud.generated_class())
+                 hud_class=hud.generated_class(),
+                 heroes=[nikki_bp.generated_class()],
+                 themes=[theme.generated_class() for theme in themes])
     set_defaults(unreal.load_asset(f"{CORE}/BP_ArenaPlayerPawn"), fog_material=fog,
                  guitar_sprite=unreal.load_asset(f"{ART}/Nikki_Guitar_Sprite"),
                  shock_burst_sprite=unreal.load_asset(f"{ART}/Shock_Burst_Sprite"),
                  throw_sound=sounds["SFX_ChainThrow"], chain_hit_sound=sounds["SFX_ChainHit"],
-                 strum_sound=sounds["SFX_Strum"])
+                 strum_sound=sounds["SFX_Strum"],
+                 chain_link_sprite=unreal.load_asset(f"{ART}/Chain_Link_Sprite"))
     unreal.log("setup_assets: done")
 
 

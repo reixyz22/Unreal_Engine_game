@@ -1,6 +1,7 @@
 #include "ArenaBeam.h"
 
 #include "ArenaPlayerPawn.h"
+#include "ArenaSession.h"
 #include "Kismet/GameplayStatics.h"
 #include "PaperSpriteComponent.h"
 
@@ -40,10 +41,7 @@ void AArenaBeam::Fire(UPaperSprite* BeamSprite, const FVector& InStart, const FV
 	Sprite->SetSprite(BeamSprite);
 	Draw(0.0, WarningThickness, WarningTint);
 
-	if (Settings.ChargeSound)
-	{
-		UGameplayStatics::PlaySound2D(this, Settings.ChargeSound);
-	}
+	UArenaSession::PlaySfx(this, Settings.ChargeSound);
 }
 
 void AArenaBeam::Tick(float DeltaTime)
@@ -54,10 +52,7 @@ void AArenaBeam::Tick(float DeltaTime)
 	if (!bActive && Now >= ActiveAt)
 	{
 		bActive = true;
-		if (FireSound)
-		{
-			UGameplayStatics::PlaySound2D(this, FireSound);
-		}
+		UArenaSession::PlaySfx(this, FireSound);
 	}
 
 	// Each phase sweeps out from the Cleric: slow enough to read the direction,

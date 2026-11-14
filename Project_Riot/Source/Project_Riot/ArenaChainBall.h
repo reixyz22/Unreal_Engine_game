@@ -17,6 +17,13 @@ enum class EChainState : uint8
 	Returning
 };
 
+struct FChainLook
+{
+	UPaperSprite* Ball = nullptr;
+	UPaperSprite* Link = nullptr;
+	USoundBase* HitSound = nullptr;
+};
+
 UCLASS()
 class PROJECT_RIOT_API AArenaChainBall : public AActor
 {
@@ -27,15 +34,19 @@ public:
 
 	virtual void Tick(float DeltaTime) override;
 
-	void Throw(AArenaPlayerPawn* InThrower, AArenaEnemy* InTarget, UPaperSprite* InSprite, float InSpeed, float InDamage, USoundBase* InHitSound);
+	void Throw(AArenaPlayerPawn* InThrower, AArenaEnemy* InTarget, const FChainLook& Look, float InSpeed, float InDamage);
 
 private:
 	bool MoveToward(const FVector& Goal, float DeltaTime);
 	void HitEnemiesInPath();
 	void HitEnemy(AArenaEnemy* Enemy);
+	void DrawChain(const FVector& Hand);
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UPaperSpriteComponent> Sprite;
+
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<UPaperSpriteComponent> Chain;
 
 	UPROPERTY()
 	TObjectPtr<USoundBase> HitSound;

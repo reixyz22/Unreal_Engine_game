@@ -1,6 +1,8 @@
 #include "ArenaEnemy.h"
 
 #include "ArenaArt.h"
+#include "ArenaGameMode.h"
+#include "ArenaTheme.h"
 #include "Components/SphereComponent.h"
 #include "HealthComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -40,9 +42,22 @@ void AArenaEnemy::BeginPlay()
 	Start.Y = EnemyDepth;
 	SetActorLocation(Start);
 
+	const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+	const FEnemySkin* Skin = GameMode ? GameMode->GetTheme().FindSkin(GetClass()) : nullptr;
+	if (Skin && Skin->Anim)
+	{
+		BodyAnim = Skin->Anim;
+	}
+
 	Body->SetFlipbook(BodyAnim);
 	Body->SetSpriteColor(Tint);
 	BodyMaterial = Body->CreateDynamicMaterialInstance(0);
+	if (Skin && BodyMaterial)
+	{
+		BodyMaterial->SetVectorParameterValue(ArenaArt::PaletteShadowParam, Skin->Shadow);
+		BodyMaterial->SetVectorParameterValue(ArenaArt::PaletteLightParam, Skin->Light);
+		BodyMaterial->SetScalarParameterValue(ArenaArt::PaletteStrengthParam, Skin->Strength);
+	}
 
 	Health->OnDepleted.AddUObject(this, &AArenaEnemy::Die);
 }

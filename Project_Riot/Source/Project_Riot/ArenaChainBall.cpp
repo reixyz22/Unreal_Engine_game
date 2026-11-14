@@ -3,7 +3,7 @@
 #include "ArenaArt.h"
 #include "ArenaEnemy.h"
 #include "ArenaPlayerPawn.h"
-#include "DrawDebugHelpers.h"
+#include "ArenaSession.h"
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 #include "PaperSpriteComponent.h"
@@ -12,7 +12,11 @@ namespace
 {
 	constexpr float ArriveDistance = 20.f;
 	constexpr float BallHitRadius = 22.f;
-	const FColor ChainColor(120, 110, 120);
+	// Chain_Link.png is 8 x 3 pixels; it is stretched from her hand to the ball.
+	constexpr float LinkPixelsLong = 8.f;
+	constexpr float LinkPixelsWide = 3.f;
+	constexpr float ChainThickness = 9.f;
+	constexpr float ChainDepthOffset = -1.f;
 }
 
 AArenaChainBall::AArenaChainBall()
@@ -23,14 +27,22 @@ AArenaChainBall::AArenaChainBall()
 	Sprite->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Sprite->SetRelativeScale3D(FVector(ArenaArt::PixelScale * ArenaArt::FlailScale));
 	SetRootComponent(Sprite);
+
+	Chain = CreateDefaultSubobject<UPaperSpriteComponent>(TEXT("Chain"));
+	Chain->SetupAttachment(Sprite);
+	Chain->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Chain->SetUsingAbsoluteLocation(true);
+	Chain->SetUsingAbsoluteRotation(true);
+	Chain->SetUsingAbsoluteScale(true);
 }
 
-void AArenaChainBall::Throw(AArenaPlayerPawn* InThrower, AArenaEnemy* InTarget, UPaperSprite* InSprite, float InSpeed, float InDamage, USoundBase* InHitSound)
+void AArenaChainBall::Throw(AArenaPlayerPawn* InThrower, AArenaEnemy* InTarget, const FChainLook& Look, float InSpeed, float InDamage)
 {
 	Thrower = InThrower;
 	Target = InTarget;
-	HitSound = InHitSound;
-	Sprite->SetSprite(InSprite);
+	HitSound = Look.HitSound;
+	Sprite->SetSprite(Look.Ball);
+	Chain->SetSprite(Look.Link);
 	Speed = InSpeed;
 	Damage = InDamage;
 }
@@ -62,7 +74,7 @@ void AArenaChainBall::Tick(float DeltaTime)
 	}
 
 	const FVector Hand = ThrowerPawn->GetHandLocation();
-	DrawDebugLine(GetWorld(), Hand, GetActorLocation(), ChainColor, false, -1.f, 0, 3.f);
+	DrawChain(Hand);
 
 	if (State == EChainState::Outbound)
 	{
@@ -92,6 +104,17 @@ void AArenaChainBall::Tick(float DeltaTime)
 	}
 }
 
+void AArenaChainBall::DrawChain(const FVector& Hand)
+{
+	FVector Span = GetActorLocation() - Hand;
+	Span.Y = 0.0;
+	FVector Middle = Hand + Span * 0.5;
+	Middle.Y = GetActorLocation().Y + ChainDepthOffset;
+
+	Chain->SetWorldLocationAndRotation(Middle, FRotator(FMath::RadiansToDegrees(FMath::Atan2(Span.Z, Span.X)), 0.f, 0.f));
+	Chain->SetWorldScale3D(FVector(FMath::Max(Span.Size(), 1.0) / LinkPixelsLong, 1.0, ChainThickness / LinkPixelsWide));
+}
+
 void AArenaChainBall::HitEnemiesInPath()
 {
 	for (TActorIterator<AArenaEnemy> It(GetWorld()); It; ++It)
@@ -114,8 +137,5 @@ void AArenaChainBall::HitEnemy(AArenaEnemy* Enemy)
 
 	Enemy->ReceiveDamage(Damage);
 	HitThisThrow.Add(Enemy);
-	if (HitSound)
-	{
-		UGameplayStatics::PlaySound2D(this, HitSound);
-	}
+	UArenaSession::PlaySfx(this, HitSound);
 }

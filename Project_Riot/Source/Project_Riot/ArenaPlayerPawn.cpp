@@ -4,7 +4,10 @@
 #include "ArenaChainBall.h"
 #include "ArenaEnemy.h"
 #include "ArenaGameMode.h"
+#include "ArenaSession.h"
 #include "ArenaShockwave.h"
+#include "ArenaTheme.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Camera/CameraComponent.h"
 #include "Components/SphereComponent.h"
 #include "Engine/GameViewportClient.h"
@@ -97,9 +100,16 @@ void AArenaPlayerPawn::BeginPlay()
 	SetActorLocation(Start);
 
 	Camera->SetOrthoWidth(CameraViewWidth);
-	if (FogMaterial)
+	// Fog takes the run's theme colors; Nikki herself is never themed.
+	Fog = FogMaterial ? UMaterialInstanceDynamic::Create(FogMaterial, this) : nullptr;
+	if (Fog)
 	{
-		Camera->PostProcessSettings.AddBlendable(FogMaterial, 1.f);
+		if (const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>())
+		{
+			Fog->SetVectorParameterValue(ArenaArt::FogColorParam, GameMode->GetTheme().FogColor);
+			Fog->SetScalarParameterValue(ArenaArt::FogDensityParam, GameMode->GetTheme().FogDensity);
+		}
+		Camera->PostProcessSettings.AddBlendable(Fog, bFogEnabled ? 1.f : 0.f);
 	}
 	Body->SetFlipbook(IdleAnim);
 	Body->SetSpriteColor(BodyTint);
@@ -304,13 +314,10 @@ void AArenaPlayerPawn::ThrowChainAt(AArenaEnemy* Target)
 
 	if (AArenaChainBall* Ball = GetWorld()->SpawnActor<AArenaChainBall>(SpawnAt, FRotator::ZeroRotator))
 	{
-		Ball->Throw(this, Target, ChainBallSprite, ChainSpeed, AutoDamage, ChainHitSound);
+		Ball->Throw(this, Target, { ChainBallSprite, ChainLinkSprite, ChainHitSound }, ChainSpeed, AutoDamage);
 		bChainOut = true;
 		PlayStrike();
-		if (ThrowSound)
-		{
-			UGameplayStatics::PlaySound2D(this, ThrowSound);
-		}
+		UArenaSession::PlaySfx(this, ThrowSound);
 	}
 }
 
@@ -354,10 +361,7 @@ void AArenaPlayerPawn::CastSpecial()
 	bBurstPending = true;
 	MoveTarget.Reset();
 	BufferedAuto.Reset();
-	if (StrumSound)
-	{
-		UGameplayStatics::PlaySound2D(this, StrumSound);
-	}
+	UArenaSession::PlaySfx(this, StrumSound);
 }
 
 void AArenaPlayerPawn::UpdateSpecial()
@@ -411,7 +415,7 @@ void AArenaPlayerPawn::SetFogEnabled(bool bEnabled)
 	bFogEnabled = bEnabled;
 	for (FWeightedBlendable& Blendable : Camera->PostProcessSettings.WeightedBlendables.Array)
 	{
-		if (Blendable.Object == FogMaterial)
+		if (Blendable.Object == Fog)
 		{
 			Blendable.Weight = bEnabled ? 1.f : 0.f;
 		}
@@ -426,6 +430,11 @@ bool AArenaPlayerPawn::IsRooted() const
 void AArenaPlayerPawn::Heal(float Amount)
 {
 	Health->Heal(Amount);
+}
+
+UPaperSprite* AArenaPlayerPawn::GetPortrait() const
+{
+	return IdleAnim ? IdleAnim->GetSpriteAtFrame(0) : nullptr;
 }
 
 void AArenaPlayerPawn::OnChainReturned()

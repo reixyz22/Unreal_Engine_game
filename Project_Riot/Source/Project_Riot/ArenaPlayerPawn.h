@@ -9,6 +9,7 @@ class UCameraComponent;
 class UHealthComponent;
 class UInputAction;
 class UInputMappingContext;
+class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class UPaperFlipbook;
 class UPaperFlipbookComponent;
@@ -51,6 +52,8 @@ public:
 	bool IsFogEnabled() const { return bFogEnabled; }
 	void SetFogEnabled(bool bEnabled);
 	UPaperSprite* GetSpecialIcon() const { return GuitarSprite; }
+	const FText& GetHeroName() const { return HeroName; }
+	UPaperSprite* GetPortrait() const;
 	int32 GetSpecialCost() const { return SpecialManaCost; }
 
 protected:
@@ -111,6 +114,9 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Camera")
 	TObjectPtr<UMaterialInterface> FogMaterial;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Look")
+	FText HeroName = NSLOCTEXT("Arena", "Nikki", "Nikki");
+
 	UPROPERTY(EditAnywhere, Category = "Look")
 	TObjectPtr<UPaperFlipbook> IdleAnim;
 
@@ -135,6 +141,9 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "Auto Attack")
 	TObjectPtr<UPaperSprite> ChainBallSprite;
+
+	UPROPERTY(EditAnywhere, Category = "Auto Attack")
+	TObjectPtr<UPaperSprite> ChainLinkSprite;
 
 	UPROPERTY(EditAnywhere, Category = "Auto Attack")
 	float AutoDamage = 16.f;
@@ -184,6 +193,9 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "Sound")
 	TObjectPtr<USoundBase> StrumSound;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> Fog;
 
 	int32 Mana = 0;
 	bool bFogEnabled = true;

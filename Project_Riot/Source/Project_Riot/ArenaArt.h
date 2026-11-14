@@ -16,4 +16,11 @@ namespace ArenaArt
 	// M_ArenaSprite draws a 1px outline in this color; alpha 0 hides it.
 	inline const FName OutlineParam(TEXT("OutlineColor"));
 	inline const FLinearColor HoverOutline(4.f, 0.15f, 0.1f, 1.f);
+
+	// M_ArenaSprite palette swap (see FEnemySkin) and M_ArenaFog parameters.
+	inline const FName PaletteShadowParam(TEXT("PaletteShadow"));
+	inline const FName PaletteLightParam(TEXT("PaletteLight"));
+	inline const FName PaletteStrengthParam(TEXT("PaletteStrength"));
+	inline const FName FogColorParam(TEXT("FogColor"));
+	inline const FName FogDensityParam(TEXT("FogDensity"));
 }

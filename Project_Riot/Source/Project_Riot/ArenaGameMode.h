@@ -5,6 +5,9 @@
 #include "ArenaGameMode.generated.h"
 
 class AArenaEnemy;
+class AArenaPlayerPawn;
+class UArenaTheme;
+class UPaperSprite;
 class USoundBase;
 
 // One enemy type's place in the waves: from which round it appears, and its share of each wave.
@@ -44,6 +47,13 @@ public:
 
 	void OnPlayerDied();
 
+	// The run's theme, picked at random before anything else begins play.
+	const UArenaTheme& GetTheme() const { return *Theme; }
+	UPaperSprite* GetEnemyIcon(TSubclassOf<AArenaEnemy> Type) const;
+
+	const TArray<TSubclassOf<AArenaPlayerPawn>>& GetHeroes() const { return Heroes; }
+	void ChooseHero(TSubclassOf<AArenaPlayerPawn> Hero);
+
 	// What the wave banner shows: the wave being fought, or the next one while it's incoming.
 	int32 GetBannerWave() const { return bWaveQueued ? Round + 1 : Round; }
 	const TArray<FWaveGroup>& GetBannerGroups() const { return Wave; }
@@ -52,7 +62,9 @@ public:
 	int32 GetRoundsSurvived() const { return FMath::Max(0, Round - 1); }
 
 protected:
+	virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
 	virtual void BeginPlay() override;
+	virtual UClass* GetDefaultPawnClassForController_Implementation(AController* InController) override;
 
 private:
 	void CheckWave();
@@ -62,8 +74,15 @@ private:
 	int32 CountEnemies() const;
 	void RestartArena();
 
-	UPROPERTY(EditDefaultsOnly, Category = "Audio")
-	TObjectPtr<USoundBase> Music;
+	// Playable heroes, shown on the start screen.
+	UPROPERTY(EditDefaultsOnly, Category = "Heroes")
+	TArray<TSubclassOf<AArenaPlayerPawn>> Heroes;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Theme")
+	TArray<TSubclassOf<UArenaTheme>> Themes;
+
+	UPROPERTY()
+	TObjectPtr<const UArenaTheme> Theme;
 
 	// The first rule is the filler type: it gets whatever the other types' shares leave over.
 	UPROPERTY(EditDefaultsOnly, Category = "Waves")

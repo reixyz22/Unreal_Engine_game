@@ -3,6 +3,12 @@
 #include "ArenaArt.h"
 #include "ArenaEnemy.h"
 #include "ArenaHUD.h"
+#include "ArenaPlayerPawn.h"
+#include "ArenaSession.h"
+#include "ArenaTheme.h"
+#include "PaperFlipbook.h"
+#include "PaperSpriteActor.h"
+#include "PaperSpriteComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
@@ -20,16 +26,66 @@ AArenaGameMode::AArenaGameMode()
 	HUDClass = AArenaHUD::StaticClass();
 }
 
+void AArenaGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
+{
+	Super::InitGame(MapName, Options, ErrorMessage);
+
+	const TSubclassOf<UArenaTheme> Picked = Themes.IsEmpty() ? nullptr : Themes[FMath::RandRange(0, Themes.Num() - 1)];
+	Theme = Picked ? Picked->GetDefaultObject<UArenaTheme>() : GetDefault<UArenaTheme>();
+}
+
 void AArenaGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (Music)
+	if (UArenaSession* Session = UArenaSession::Get(this))
 	{
-		UGameplayStatics::SpawnSound2D(this, Music);
+		Session->PlayMusic(Theme->Music);
+	}
+	// The arena floor is the level's sprite actor.
+	for (TActorIterator<APaperSpriteActor> It(GetWorld()); It; ++It)
+	{
+		It->GetRenderComponent()->SetSpriteColor(Theme->FloorTint);
 	}
 
 	GetWorldTimerManager().SetTimer(CheckTimer, this, &AArenaGameMode::CheckWave, CheckInterval, true, 1.f);
+}
+
+UClass* AArenaGameMode::GetDefaultPawnClassForController_Implementation(AController* InController)
+{
+	const UArenaSession* Session = UArenaSession::Get(this);
+	return Session && Session->ChosenHero ? Session->ChosenHero.Get() : Super::GetDefaultPawnClassForController_Implementation(InController);
+}
+
+void AArenaGameMode::ChooseHero(TSubclassOf<AArenaPlayerPawn> Hero)
+{
+	if (UArenaSession* Session = UArenaSession::Get(this))
+	{
+		Session->ChosenHero = Hero;
+	}
+
+	// Swap the pawn in place if the chosen hero isn't the one already spawned.
+	APlayerController* Controller = UGameplayStatics::GetPlayerController(this, 0);
+	APawn* Current = Controller ? Controller->GetPawn() : nullptr;
+	if (!Hero || !Current || Current->IsA(Hero))
+	{
+		return;
+	}
+	if (APawn* Replacement = GetWorld()->SpawnActor<APawn>(Hero, Current->GetActorTransform()))
+	{
+		Controller->Possess(Replacement);
+		Current->Destroy();
+	}
+}
+
+UPaperSprite* AArenaGameMode::GetEnemyIcon(TSubclassOf<AArenaEnemy> Type) const
+{
+	const FEnemySkin* Skin = Type ? Theme->FindSkin(Type) : nullptr;
+	if (Skin && Skin->Anim)
+	{
+		return Skin->Anim->GetSpriteAtFrame(0);
+	}
+	return Type ? Type->GetDefaultObject<AArenaEnemy>()->GetIcon() : nullptr;
 }
 
 void AArenaGameMode::CheckWave()

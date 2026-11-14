@@ -23,8 +23,7 @@ RED_FLAIL_CELL = (128, 64, 160, 96)
 FLOOR_PIXELS = 768
 WALL_PIXELS = 16
 WALL_BACKING = (28, 22, 30, 255)
-# Darker, cooler floor so the glowing characters carry the contrast.
-FLOOR_TONE = (0.62, 0.58, 0.74)
+# The floor stays in its original colors; each theme tints it in-game (ArenaTheme FloorTint).
 
 # Hardware cursors per hero: Kenney's white-with-black-outline tiles, tinted and scaled up.
 CURSOR_SCALE = 2
@@ -140,7 +139,6 @@ def export_floor():
             else:
                 tile = rng.choices(floors, weights)[0]
             floor.alpha_composite(tile, (col * WALL_PIXELS, row * WALL_PIXELS))
-    floor = Image.merge("RGBA", [band.point(lambda v, k=k: int(v * k)) for band, k in zip(floor.split()[:3], FLOOR_TONE)] + [floor.split()[3]])
     floor.save(FLOOR_TARGET)
     floor.save(ROOT / "T_ArenaFloor.png")
 
@@ -182,6 +180,17 @@ def export_beam():
         for y in (0, 7):
             beam.putpixel((x, y), (255, 214, 120, 255))
     beam.save(OUT / "Cleric_Beam.png")
+
+
+def export_chain_link():
+    """One chain segment, stretched from Nikki's hand to the ball in-game."""
+    link = Image.new("RGBA", (8, 3), (150, 140, 155, 255))
+    for x in range(8):
+        link.putpixel((x, 0), OUTLINE)
+        link.putpixel((x, 2), OUTLINE)
+        if x % 4 in (1, 2):
+            link.putpixel((x, 1), (205, 198, 210, 255))
+    link.save(OUT / "Chain_Link.png")
 
 
 def export_shock_burst():
@@ -239,6 +248,7 @@ def main():
     export_cleric()
     export_guitar()
     export_beam()
+    export_chain_link()
     export_shock_burst()
     export_shards()
 

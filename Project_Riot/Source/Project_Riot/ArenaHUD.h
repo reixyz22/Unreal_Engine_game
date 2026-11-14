@@ -10,7 +10,8 @@ class UFont;
 class UHealthComponent;
 class UTexture2D;
 
-// All on-screen UI, drawn straight to the canvas each frame (see DECISIONS.md 007).
+// All on-screen UI, drawn straight to the canvas each frame (see DECISIONS.md 007):
+// the start screens, the in-game HUD, and the pause menu.
 UCLASS()
 class PROJECT_RIOT_API AArenaHUD : public AHUD
 {
@@ -19,6 +20,7 @@ class PROJECT_RIOT_API AArenaHUD : public AHUD
 public:
 	AArenaHUD();
 
+	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void DrawHUD() override;
 
@@ -29,18 +31,42 @@ private:
 		float Trail = -1.f;  // the pale "just lost" chip, which drains slower
 	};
 
+	enum class EScreen : uint8
+	{
+		ChooseHero,  // first launch: pick a hero
+		Controls,    // first launch: how to play, until the first WASD press
+		Playing,
+		Paused,
+	};
+
 	struct FMenuButton
 	{
 		FString Label;
 		FBox2D Rect;
 		TFunction<void()> Action;
+		UTexture2D* Icon = nullptr;
+	};
+
+	struct FMenuSlider
+	{
+		FString Label;
+		FBox2D Track;
+		TFunction<float()> Get;
+		TFunction<void(float)> Set;
 	};
 
 	void DrawHealthBar(const UHealthComponent& Health, float X, float Y, float Width, float Height);
+	void ShowScreen(EScreen NewScreen);
+	void DrawHeroSelect();
+	void DrawControls();
 	void DrawPauseMenu();
-	void BuildMenuButtons(AArenaPlayerPawn& Hero);
-	void SetMenuOpen(bool bOpen);
+	void DrawPanel(float X, float Y, float Width, float Height, const FString& Title);
+	void DrawButton(FMenuButton& Button, const FVector2D& Mouse);
+	void DrawSlider(FMenuSlider& Slider, float X, float Y, float Width);
 	void ClickMenu(const FVector2D& Mouse);
+	void DragSliders(const FVector2D& Mouse);
+	FVector2D GetMouse() const;
+	UFont* GetMenuFont() const;
 
 	void DrawHealthBars();
 	void DrawWaveBanner(const AArenaGameMode& GameMode);
@@ -63,5 +89,6 @@ private:
 
 	TMap<TWeakObjectPtr<const UHealthComponent>, FBarState> Bars;
 	TArray<FMenuButton> MenuButtons;
-	bool bMenuOpen = false;
+	TArray<FMenuSlider> MenuSliders;
+	EScreen CurrentScreen = EScreen::Playing;
 };
