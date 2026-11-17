@@ -26,6 +26,8 @@ AStoryProp::AStoryProp()
 
 void AStoryProp::SetArt(UPaperSprite* InSprite)
 {
+	// New art wins over any frames still playing (the bed breaks mid-swing).
+	Frames.Reset();
 	Sprite->SetSprite(InSprite);
 	if (InSprite)
 	{

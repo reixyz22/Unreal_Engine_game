@@ -71,8 +71,9 @@ public:
 	const FArenaStats& GetStats() const { return Stats; }
 	// Recomputes stats from base + purchases (call after buying something).
 	void RefreshStats();
-	// Story: her lightning pyjamas, worn until she gets dressed in the intro.
-	void SetPyjamas(bool bWear);
+	// Story: her lightning pyjamas, worn at home until she gets dressed in the intro.
+	// Read from the session, so a freshly spawned pawn is dressed right too.
+	bool IsInPyjamas() const;
 
 protected:
 	virtual void BeginPlay() override;
@@ -240,7 +241,6 @@ protected:
 	TObjectPtr<UMaterialInstanceDynamic> Fog;
 
 	FArenaStats Stats;
-	bool bPyjamas = false;
 	int32 Mana = 0;
 	bool bFogEnabled = true;
 	double StunnedUntil = 0.0;

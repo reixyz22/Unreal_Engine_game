@@ -48,5 +48,8 @@ private:
 	TObjectPtr<AStoryProp> Alert;
 
 	bool bPhoneTyping = false;
+	// Nikki is in the bed sprite, so her pawn stays hidden (checked every frame, in case
+	// the pawn is replaced while the intro runs).
+	bool bInBed = false;
 	bool bDoorOpen = false;
 };

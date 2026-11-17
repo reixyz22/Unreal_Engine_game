@@ -55,12 +55,8 @@ void AHutScene::StartScene()
 void AHutScene::PlayIntro()
 {
 	bLockInput = true;
-	if (AArenaPlayerPawn* Hero = GetHero())
-	{
-		Hero->SetActorHiddenInGame(true);
-		Hero->SetPyjamas(true);
-		MoveHeroTo(WakeSpot);
-	}
+	bInBed = true;
+	MoveHeroTo(WakeSpot);
 
 	// The phone buzzes on the nightstand, then slides up with Carl's text.
 	After(1.2f, [this]()
@@ -84,6 +80,14 @@ void AHutScene::PlayIntro()
 void AHutScene::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	if (bInBed)
+	{
+		if (AArenaPlayerPawn* Hero = GetHero())
+		{
+			Hero->SetActorHiddenInGame(true);
+		}
+	}
 
 	if (bPhoneTyping)
 	{
@@ -239,6 +243,7 @@ void AHutScene::SmashOutOfBed()
 	Sfx(TEXT("Smash"));
 	Popup(TEXT("WHAM!"), *Bed);
 	MoveHeroTo(WakeSpot);
+	bInBed = false;
 	if (AArenaPlayerPawn* Hero = GetHero())
 	{
 		Hero->SetActorHiddenInGame(false);
@@ -261,12 +266,12 @@ void AHutScene::GetDressed()
 	Closet->OnUse = nullptr;
 	Closet->Punch();
 	Sfx(TEXT("Poof"));
-	if (AArenaPlayerPawn* Hero = GetHero())
+	// The pawn reads bDressed, so this is what swaps the pyjamas for her clothes.
+	GetSession().bDressed = true;
+	if (const AArenaPlayerPawn* Hero = GetHero())
 	{
-		Hero->SetPyjamas(false);
 		Popup(TEXT("POOF!"), *Hero);
 	}
-	GetSession().bDressed = true;
 
 	Say(TEXT("dressed"), [this]()
 	{

@@ -128,7 +128,7 @@ void AArenaPlayerPawn::BeginPlay()
 	Body->SetSpriteColor(BodyTint);
 	HeldFlail->SetSprite(FlailHandleSprite);
 	Guitar->SetSprite(GuitarSprite);
-	Guitar->SetVisibility(HasSpecial());
+	Guitar->SetVisibility(HasSpecial() && !IsInPyjamas());
 
 	Health->OnDepleted.AddUObject(this, &AArenaPlayerPawn::Die);
 }
@@ -227,6 +227,10 @@ void AArenaPlayerPawn::Tick(float DeltaTime)
 void AArenaPlayerPawn::TickStoryScene(AStoryScene& Scene)
 {
 	// No combat here: walk around, use whatever she is standing next to, and throw at mace targets.
+	// No guitar and no shop outfit over the pyjamas; both come back when she dresses.
+	const bool bPyjamas = IsInPyjamas();
+	Guitar->SetVisibility(HasSpecial() && !bPyjamas);
+	Body->SetSpriteColor(bPyjamas ? FLinearColor::White : BodyTint);
 	FVector Cursor;
 	AStoryProp* MaceTarget = GetCursorWorldLocation(Cursor) ? Scene.FindMaceTargetAt(Cursor) : nullptr;
 	APlayerController* PlayerController = Cast<APlayerController>(GetController());
@@ -254,12 +258,13 @@ void AArenaPlayerPawn::TickStoryScene(AStoryScene& Scene)
 
 UPaperFlipbook* AArenaPlayerPawn::Outfit(UPaperFlipbook* Normal, UPaperFlipbook* Pyjama) const
 {
-	return bPyjamas && Pyjama ? Pyjama : Normal;
+	return IsInPyjamas() && Pyjama ? Pyjama : Normal;
 }
 
-void AArenaPlayerPawn::SetPyjamas(bool bWear)
+bool AArenaPlayerPawn::IsInPyjamas() const
 {
-	bPyjamas = bWear;
+	const UArenaSession* Session = UArenaSession::Get(this);
+	return Session && Session->Scene == EArenaScene::Hut && !Session->bDressed;
 }
 
 void AArenaPlayerPawn::RefreshStats()
@@ -271,7 +276,7 @@ void AArenaPlayerPawn::RefreshStats()
 		Stats.Add(ArenaShop::TotalBonus(*Session), 1);
 	}
 	Health->SetMaxHealth(Stats.MaxHealth);
-	Guitar->SetVisibility(HasSpecial());
+	Guitar->SetVisibility(HasSpecial() && !IsInPyjamas());
 	if (const UArenaSession* Session = UArenaSession::Get(this))
 	{
 		BodyTint = ArenaShop::OutfitTint(*Session);

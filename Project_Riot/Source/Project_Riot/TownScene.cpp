@@ -74,10 +74,6 @@ void ATownScene::StartScene()
 	Gate = AddProp(TEXT("Gate"), FVector2D(0.0, -1470.0), false);
 
 	MoveHeroTo(Session.PreviousScene == EArenaScene::Hut ? FromHutSpot : FromMapSpot);
-	if (AArenaPlayerPawn* Hero = GetHero())
-	{
-		Hero->SetPyjamas(false);
-	}
 }
 
 AStoryProp* ATownScene::AddTalker(FName ArtName, const FVector2D& Where, const FString& Prompt, const FString& Section, bool bBlocksMovement)
