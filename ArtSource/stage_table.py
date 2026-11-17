@@ -19,3 +19,10 @@ NIKKI_ROUTE = [
     ("The Far Desert", "BP_Theme_FarDesert", (0.62, 0.74), True),
     ("Blue Elf World", "BP_Theme_ElfWorld", (0.46, 0.90), True),
 ]
+
+# Played after both routes are finished. Placeholder: it starts past the first stop.
+FINAL_ROUTE = [
+    ("The Desert", None, (0.64, 0.42), True),
+    ("Space", "BP_Theme_Space", (0.40, 0.58), True),
+    ("???", "BP_Theme_Dungeon", (0.50, 0.74), True),
+]

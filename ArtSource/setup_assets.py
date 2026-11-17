@@ -11,7 +11,7 @@ import unreal
 
 SOURCE = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir() + "../ArtSource/")
 sys.path.insert(0, SOURCE)
-from stage_table import CARL_ROUTE, NIKKI_ROUTE  # noqa: E402
+from stage_table import CARL_ROUTE, FINAL_ROUTE, NIKKI_ROUTE  # noqa: E402
 
 ART = "/Game/Art"
 CORE = "/Game/Core"
@@ -527,6 +527,7 @@ def main():
                  hud_class=hud.generated_class(),
                  heroes=[nikki_bp.generated_class(), carl_bp.generated_class()],
                  story_art=story_art, story_sounds=story_sounds,
+                 final_route=build_route(themes, FINAL_ROUTE),
                  town_music=theme_music["Town"], map_music=theme_music["Map"])
     set_defaults(unreal.load_asset(f"{CORE}/BP_ArenaPlayerPawn"), fog_material=fog,
                  guitar_sprite=unreal.load_asset(f"{ART}/Nikki_Guitar_Sprite"),

@@ -14,6 +14,7 @@ enum class EArenaScene : uint8
 	Town,      // the village hub
 	WorldMap,  // stage select
 	Stage,     // a combat stage
+	Ending,    // a route's closing scene
 };
 class UAudioComponent;
 class USoundBase;
@@ -28,6 +29,15 @@ class PROJECT_RIOT_API UArenaSession : public UGameInstanceSubsystem
 
 public:
 	static UArenaSession* Get(const UObject* WorldContext);
+
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+
+	// Money, purchases, outfit and finished routes are kept on disk.
+	void SaveProgress() const;
+	// Marks a route finished, saves, resets the story, and returns to the hero select screen.
+	void FinishRoute(const UObject* WorldContext, const FString& RouteName);
+	// The final route opens once both heroes' routes are finished.
+	bool IsFinalUnlocked() const { return FinishedRoutes.Contains(TEXT("Nikki")) && FinishedRoutes.Contains(TEXT("Carl")); }
 
 	void PlayMusic(USoundBase* Music);
 	// Plays a one-shot at the player's SFX volume. Safe with a null sound.
@@ -48,6 +58,10 @@ public:
 	TSubclassOf<AArenaPlayerPawn> ChosenHero;
 	bool bIntroDone = false;       // hero chosen on the start screen
 	bool bControlsShown = false;   // how-to-play shown before the first stage
+
+	// Routes finished so far ("Nikki", "Carl", "Final"), and whether this run is the final route.
+	TArray<FString> FinishedRoutes;
+	bool bFinalRoute = false;
 
 	// Story progress.
 	EArenaScene Scene = EArenaScene::Hut;

@@ -264,7 +264,7 @@ void AArenaHUD::DrawHUD()
 	const UArenaSession* Session = UArenaSession::Get(this);
 	if (Session && Session->bDebug)
 	{
-		DrawText(TEXT("DEBUG   F2 +mana   F3 +5000 gold   F4 clear wave   F5 unlock all   F6 world map   (F1 off)"),
+		DrawText(TEXT("DEBUG   F2 +mana   F3 +5000 gold   F4 clear wave   F5 unlock all   F6 world map   F7 open final route   (F1 off)"),
 			FLinearColor(0.4f, 1.f, 0.5f), 12.f, Canvas->ClipY - 24.f, GEngine->GetSmallFont(), 1.f);
 	}
 
@@ -596,7 +596,9 @@ void AArenaHUD::DrawHeroSelect()
 	constexpr float CardHeight = 330.f;
 	constexpr float Gap = 24.f;
 	const TArray<TSubclassOf<AArenaPlayerPawn>>& Heroes = GameMode->GetHeroes();
-	const float CardsWidth = FMath::Max(1, Heroes.Num()) * (CardWidth + Gap) - Gap;
+	UArenaSession* Session = UArenaSession::Get(this);
+	const bool bFinalOpen = Session && Session->IsFinalUnlocked();
+	const float CardsWidth = FMath::Max(1, Heroes.Num() + (bFinalOpen ? 1 : 0)) * (CardWidth + Gap) - Gap;
 	const float PanelWidth = FMath::Max(520.f, CardsWidth + 80.f);
 	const float PanelHeight = 110.f + CardHeight + 40.f;
 	const float PanelX = (Canvas->ClipX - PanelWidth) * 0.5f;
@@ -617,6 +619,7 @@ void AArenaHUD::DrawHeroSelect()
 				{
 					Mode->ChooseHero(Hero);
 				}
+				UArenaSession::Get(this)->bFinalRoute = false;
 				// Straight into the story; how-to-play waits for the first fight.
 				ShowScreen(EScreen::Playing);
 				FadeInFrom = GetWorld()->GetRealTimeSeconds();
@@ -624,6 +627,24 @@ void AArenaHUD::DrawHeroSelect()
 			Portrait ? Portrait->GetBakedTexture() : nullptr });
 		DrawButton(Card, GetMouse());
 		X += CardWidth + Gap;
+	}
+
+	if (bFinalOpen && !Heroes.IsEmpty())
+	{
+		// The final route starts on the world map, past the home stop. Placeholder.
+		FMenuButton& Card = MenuButtons.Add_GetRef({ TEXT("FINAL ROUTE"),
+			FBox2D(FVector2D(X, PanelY + 110.f), FVector2D(X + CardWidth, PanelY + 110.f + CardHeight)),
+			[this, Session, First = Heroes[0]]()
+			{
+				if (AArenaGameMode* Mode = GetWorld()->GetAuthGameMode<AArenaGameMode>())
+				{
+					Mode->ChooseHero(First);
+				}
+				Session->bFinalRoute = Session->bIntroDone = Session->bContractSigned = true;
+				Session->StageIndex = Session->HighestUnlocked = 1;
+				Session->Travel(this, EArenaScene::WorldMap);
+			} });
+		DrawButton(Card, GetMouse());
 	}
 }
 
@@ -1148,7 +1169,8 @@ void AArenaHUD::DrawPhone(const FPhoneView& Phone)
 void AArenaHUD::TravelToMapNode(int32 Index)
 {
 	UArenaSession* Session = UArenaSession::Get(this);
-	if (!Session || Index > Session->HighestUnlocked)
+	// On the final route the first stop is already behind her: there is no going back.
+	if (!Session || Index > Session->HighestUnlocked || (Session->bFinalRoute && Index == 0))
 	{
 		return;
 	}
@@ -1334,7 +1356,12 @@ void AArenaHUD::DrawStageClear()
 		return;
 	}
 	MenuButtons.Reset();
-	MenuButtons.Add({ TEXT("World map"), FBox2D(), [this]() { UArenaSession::Get(this)->Travel(this, EArenaScene::WorldMap); } });
+	// Clearing the last stop on the route leads to its ending instead of the map.
+	const bool bRouteDone = Session->StageIndex >= GameMode->GetRoute().Num() - 1;
+	MenuButtons.Add({ bRouteDone ? TEXT("Continue") : TEXT("World map"), FBox2D(), [this, bRouteDone]()
+	{
+		UArenaSession::Get(this)->Travel(this, bRouteDone ? EArenaScene::Ending : EArenaScene::WorldMap);
+	} });
 
 	constexpr float Width = 520.f;
 	constexpr float Height = 330.f;
@@ -1396,6 +1423,7 @@ void AArenaHUD::DrawShop()
 			}
 			UArenaSession::PlaySfx(this, GameMode->GetStorySound(TEXT("Coin")));
 			Hero->RefreshStats();
+			Session->SaveProgress();
 			// Some purchases are story moments; she says her piece next time she's home.
 			if (bBought && !Item.BoughtSection.IsEmpty())
 			{
@@ -1487,6 +1515,13 @@ void AArenaHUD::TickDebug()
 	if (PlayerOwner->WasInputKeyJustPressed(EKeys::F6))
 	{
 		Session->Travel(this, EArenaScene::WorldMap);
+	}
+	if (PlayerOwner->WasInputKeyJustPressed(EKeys::F7))
+	{
+		// Count both heroes' routes as finished, which opens the final route on the title screen.
+		Session->FinishedRoutes.AddUnique(TEXT("Nikki"));
+		Session->FinishedRoutes.AddUnique(TEXT("Carl"));
+		Session->SaveProgress();
 	}
 }
 

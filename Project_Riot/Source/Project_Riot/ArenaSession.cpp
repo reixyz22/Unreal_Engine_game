@@ -1,5 +1,7 @@
 #include "ArenaSession.h"
 
+#include "ArenaProgress.h"
+
 #include "Components/AudioComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -37,6 +39,48 @@ void UArenaSession::PlayMusic(USoundBase* Music)
 		ApplyMusicVolume();
 		MusicPlayer->FadeIn(MusicFadeInSeconds);
 	}
+}
+
+namespace
+{
+	const FString ProgressSlot(TEXT("Progress"));
+}
+
+void UArenaSession::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+	if (const UArenaProgress* Saved = Cast<UArenaProgress>(UGameplayStatics::LoadGameFromSlot(ProgressSlot, 0)))
+	{
+		Gold = Saved->Gold;
+		Purchases = Saved->Purchases;
+		Outfit = Saved->Outfit;
+		FinishedRoutes = Saved->FinishedRoutes;
+	}
+}
+
+void UArenaSession::SaveProgress() const
+{
+	UArenaProgress* Progress = Cast<UArenaProgress>(UGameplayStatics::CreateSaveGameObject(UArenaProgress::StaticClass()));
+	Progress->Gold = Gold;
+	Progress->Purchases = Purchases;
+	Progress->Outfit = Outfit;
+	Progress->FinishedRoutes = FinishedRoutes;
+	UGameplayStatics::SaveGameToSlot(Progress, ProgressSlot, 0);
+}
+
+void UArenaSession::FinishRoute(const UObject* WorldContext, const FString& RouteName)
+{
+	FinishedRoutes.AddUnique(RouteName);
+	SaveProgress();
+
+	// Back to the start: a fresh story, with money and purchases kept.
+	ChosenHero = nullptr;
+	bIntroDone = bFinalRoute = false;
+	bIntroSeen = bBedSmashed = bDressed = bContractSigned = false;
+	StageIndex = HighestUnlocked = 1;
+	PendingSection.Reset();
+	Travel(WorldContext, EArenaScene::Hut);
+	PreviousScene = EArenaScene::Hut;
 }
 
 void UArenaSession::Travel(const UObject* WorldContext, EArenaScene NewScene, int32 NewStageIndex)

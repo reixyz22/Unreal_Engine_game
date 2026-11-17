@@ -3,6 +3,7 @@
 #include "ArenaArt.h"
 #include "ArenaEnemy.h"
 #include "ArenaHUD.h"
+#include "EndingScene.h"
 #include "HutScene.h"
 #include "TownScene.h"
 #include "ArenaPlayerPawn.h"
@@ -50,6 +51,10 @@ const TArray<FStageDef>& AArenaGameMode::GetRoute() const
 	// Before a hero is picked (the first start screen), the first hero's route stands in.
 	static const TArray<FStageDef> Empty;
 	const UArenaSession* Session = UArenaSession::Get(this);
+	if (Session && Session->bFinalRoute)
+	{
+		return FinalRoute;
+	}
 	const TSubclassOf<AArenaPlayerPawn> Hero = Session && Session->ChosenHero ? Session->ChosenHero : Heroes.IsEmpty() ? nullptr : Heroes[0];
 	return Hero ? Hero->GetDefaultObject<AArenaPlayerPawn>()->GetRoute() : Empty;
 }
@@ -94,6 +99,9 @@ void AArenaGameMode::BeginPlay()
 		break;
 	case EArenaScene::Town:
 		Scene = GetWorld()->SpawnActor<ATownScene>();
+		break;
+	case EArenaScene::Ending:
+		Scene = GetWorld()->SpawnActor<AEndingScene>();
 		break;
 	case EArenaScene::WorldMap:
 		break;
@@ -299,6 +307,7 @@ void AArenaGameMode::BankGold()
 	{
 		bGoldBanked = true;
 		Session->Gold += Score;
+		Session->SaveProgress();
 	}
 }
 

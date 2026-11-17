@@ -65,3 +65,11 @@ Nikki: I can't leave without a job lined up. The elder is by the gate.
 [bought_guitar]
 Nikki: A guitar again. I had to sell my old one when I stopped performing.
 Nikki: (William: the rest of this moment is yours.)
+
+# ---------------------------------------------------------------- endings
+
+[ending]
+Nikki: (William: the closing scene of this route goes here.)
+
+[ending_final]
+Nikki: (William: the closing scene of the final route goes here.)

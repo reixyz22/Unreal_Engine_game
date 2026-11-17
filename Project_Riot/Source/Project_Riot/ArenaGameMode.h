@@ -117,6 +117,10 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Heroes")
 	TArray<TSubclassOf<AArenaPlayerPawn>> Heroes;
 
+	// The route played after both heroes' routes are finished. Placeholder.
+	UPROPERTY(EditDefaultsOnly, Category = "Story")
+	TArray<FStageDef> FinalRoute;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Story")
 	TMap<FName, TObjectPtr<UPaperSprite>> StoryArt;
 

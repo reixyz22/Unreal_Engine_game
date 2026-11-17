@@ -57,3 +57,8 @@ Carl: I should find work before I leave. The elder is by the gate.
 
 [bought_volley]
 Carl: (William: Carl's line about his new volley.)
+
+# ---------------------------------------------------------------- ending
+
+[ending]
+Carl: (William: the closing scene of this route goes here.)

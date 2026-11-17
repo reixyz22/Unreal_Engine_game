@@ -10,7 +10,7 @@
 
 namespace
 {
-	constexpr float ArriveDistance = 20.f;
+	constexpr float BallArriveDistance = 20.f;
 	constexpr float BallHitRadius = 22.f;
 	// Chain_Link.png is 8 x 3 pixels; it is stretched from her hand to the ball.
 	constexpr float LinkPixelsLong = 8.f;
@@ -53,7 +53,7 @@ bool AArenaChainBall::MoveToward(const FVector& Goal, float DeltaTime)
 	ToGoal.Y = 0.f;
 
 	const double Step = Speed * DeltaTime;
-	if (ToGoal.Size() <= FMath::Max(Step, ArriveDistance))
+	if (ToGoal.Size() <= FMath::Max(Step, BallArriveDistance))
 	{
 		return true;
 	}
