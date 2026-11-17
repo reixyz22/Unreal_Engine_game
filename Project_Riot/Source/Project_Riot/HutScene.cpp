@@ -183,40 +183,44 @@ void AHutScene::OnPhoneRead()
 		After(1.4f, [this]()
 		{
 			Phone.bShown = false;
-			WakeUp();
+			SoundAlarm();
 		});
 	});
 }
 
-void AHutScene::WakeUp()
+void AHutScene::SoundAlarm()
 {
-	if (Alert)
+	// Still in bed. The alarm goes off; she can't move until she swings her way out.
+	Sfx(TEXT("Alarm"));
+	Nightstand->Wobble(1.5f);
+	Popup(TEXT("BEEP BEEP BEEP"), *Nightstand);
+	After(1.2f, [this]()
 	{
-		Alert->Destroy();
-	}
-	Bed->SetArt(Art(TEXT("Bed")));
-	Bed->Punch();
-	Sfx(TEXT("Poof"));
-	if (AArenaPlayerPawn* Hero = GetHero())
-	{
-		Hero->SetActorHiddenInGame(false);
-	}
-	bLockInput = false;
-
-	Objective = TEXT("Take it out on the bed.  Walk up to it and right-click.");
-	PointAt(Bed);
-	Bed->Prompt = TEXT("Smash it");
-	Bed->bSwing = true;
-	Bed->OnUse = [this]() { SmashBed(); };
+		Say(TEXT("alarm"), [this]()
+		{
+			if (Alert)
+			{
+				Alert->Destroy();
+			}
+			bLockInput = false;
+			bHoldStill = true;
+			Objective = TEXT("Get out of bed.  Right-click it.");
+			PointAt(Bed);
+			Bed->OnMaceHit = [this]() { SmashOutOfBed(); };
+		});
+	});
 }
 
-void AHutScene::SmashBed()
+void AHutScene::SmashOutOfBed()
 {
-	Bed->OnUse = nullptr;
+	// She showed herself as she threw; the bed breaks when the ball lands.
+	Bed->OnMaceHit = nullptr;
 	Bed->SetArt(Art(TEXT("Bed_Broken")));
 	Bed->Punch();
 	Sfx(TEXT("Smash"));
 	Popup(TEXT("WHAM!"), *Bed);
+	bHoldStill = false;
+	Objective.Reset();
 	GetSession().bBedSmashed = true;
 
 	Say(TEXT("bed_smashed"), [this]()

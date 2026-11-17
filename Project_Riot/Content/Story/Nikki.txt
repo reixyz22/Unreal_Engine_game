@@ -16,8 +16,11 @@ Carl: hey want to hang out? you were so cool. I think you're so beautiful and un
 [phone_react]
 Nikki: Ugh. Not this guy again.
 
+[alarm]
+Nikki: Ugh. I guess I have to get ready.
+
 [bed_smashed]
-Nikki: ...Okay. I feel a little better.
+Nikki: ...Okay. I'm up.
 
 [dressed]
 Nikki: Lightning pyjamas off. Work clothes on.

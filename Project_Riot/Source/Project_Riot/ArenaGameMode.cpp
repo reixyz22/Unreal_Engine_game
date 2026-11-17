@@ -22,7 +22,6 @@ namespace
 {
 	constexpr float CheckInterval = 0.5f;
 	constexpr int32 MaxComboTier = 5;
-	constexpr double PopupSeconds = 1.2;
 	// Wave bonus: points per wave number, plus points for every second under par.
 	constexpr int32 WaveBonusPerRound = 100;
 	constexpr double WaveParSeconds = 60.0;
@@ -324,7 +323,7 @@ void AArenaGameMode::OnEnemyKilled(const AArenaEnemy& Enemy, const UObject* Sour
 	Score += Points;
 
 	const double Now = GetWorld()->GetTimeSeconds();
-	Popups.RemoveAll([Now](const FScorePopup& Popup) { return Now - Popup.Time > PopupSeconds; });
+	Popups.RemoveAll([Now](const FScorePopup& Popup) { return Now - Popup.Time > FScorePopup::Lifetime; });
 	Popups.Add({ Enemy.GetActorLocation(), FMath::Min(KillsInCombo - 1, MaxComboTier), Points, Now });
 }
 

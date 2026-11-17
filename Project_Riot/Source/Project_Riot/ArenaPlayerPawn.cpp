@@ -8,6 +8,7 @@
 #include "ArenaShop.h"
 #include "ArenaShockwave.h"
 #include "ArenaTheme.h"
+#include "StoryProp.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Camera/CameraComponent.h"
 #include "Components/SphereComponent.h"
@@ -225,16 +226,26 @@ void AArenaPlayerPawn::Tick(float DeltaTime)
 
 void AArenaPlayerPawn::TickStoryScene(AStoryScene& Scene)
 {
-	// No combat here: walk around, and use whatever she is standing next to.
-	const APlayerController* PlayerController = Cast<APlayerController>(GetController());
-	const bool bUse = PlayerController && (PlayerController->WasInputKeyJustPressed(EKeys::RightMouseButton) || PlayerController->WasInputKeyJustPressed(EKeys::E));
-	if (bUse && Scene.UseFocusProp())
+	// No combat here: walk around, use whatever she is standing next to, and throw at mace targets.
+	FVector Cursor;
+	AStoryProp* MaceTarget = GetCursorWorldLocation(Cursor) ? Scene.FindMaceTargetAt(Cursor) : nullptr;
+	APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	if (PlayerController)
+	{
+		PlayerController->CurrentMouseCursor = MaceTarget ? EMouseCursor::Crosshairs : EMouseCursor::Default;
+	}
+	const bool bRightClick = PlayerController && PlayerController->WasInputKeyJustPressed(EKeys::RightMouseButton);
+	if (bRightClick && MaceTarget)
+	{
+		ThrowChainAtProp(MaceTarget);
+	}
+	else if (PlayerController && (bRightClick || PlayerController->WasInputKeyJustPressed(EKeys::E)) && Scene.UseFocusProp())
 	{
 		PlayStrike();
 		UArenaSession::PlaySfx(this, ThrowSound);
 	}
 
-	const FVector2D Direction = Scene.BlocksInput() ? FVector2D::ZeroVector : MoveInput.GetClampedToMaxSize(1.0);
+	const FVector2D Direction = Scene.BlocksMovement() ? FVector2D::ZeroVector : MoveInput.GetClampedToMaxSize(1.0);
 	const FVector From = GetActorLocation();
 	const FVector Wanted = From + FVector(Direction.X, 0.0, Direction.Y) * Stats.MoveSpeed * GetWorld()->GetDeltaSeconds();
 	SetActorLocation(Scene.ResolveMove(From, Wanted, Collision->GetScaledSphereRadius()));
@@ -395,6 +406,38 @@ void AArenaPlayerPawn::ThrowChainAt(AArenaEnemy* Target)
 	if (AArenaChainBall* Ball = GetWorld()->SpawnActor<AArenaChainBall>(SpawnAt, FRotator::ZeroRotator))
 	{
 		Ball->Throw(this, Target, { ChainBallSprite, ChainLinkSprite, ChainHitSound }, ChainSpeed, Stats.AttackDamage * AutoDamageRatio);
+		bChainOut = true;
+		PlayStrike();
+		UArenaSession::PlaySfx(this, ThrowSound);
+	}
+}
+
+void AArenaPlayerPawn::ThrowChainAtProp(AStoryProp* Prop)
+{
+	if (bChainOut)
+	{
+		return;
+	}
+
+	FVector SpawnAt = GetActorLocation();
+	SpawnAt.Y = ChainDepth;
+	FVector Spot = Prop->GetActorLocation();
+	Spot.Y = ChainDepth;
+
+	if (AArenaChainBall* Ball = GetWorld()->SpawnActor<AArenaChainBall>(SpawnAt, FRotator::ZeroRotator))
+	{
+		// A hidden hero (still in bed) shows herself as she swings.
+		SetActorHiddenInGame(false);
+		TWeakObjectPtr<AStoryProp> Target = Prop;
+		Ball->ThrowAt(this, Spot, { ChainBallSprite, ChainLinkSprite, ChainHitSound }, ChainSpeed, [Target]()
+		{
+			if (Target.IsValid() && Target->OnMaceHit)
+			{
+				// Copy first: the callback usually clears itself.
+				const TFunction<void()> Hit = Target->OnMaceHit;
+				Hit();
+			}
+		});
 		bChainOut = true;
 		PlayStrike();
 		UArenaSession::PlaySfx(this, ThrowSound);

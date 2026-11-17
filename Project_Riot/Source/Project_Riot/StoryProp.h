@@ -35,6 +35,9 @@ public:
 	// Props sort in front of or behind the hero by position; overlays (arrows, poofs) always draw on top.
 	bool bOverlay = false;
 	TFunction<void()> OnUse;
+	// Set to make this a mace target: hover shows the sword cursor, right-click throws at it,
+	// and this runs when the ball lands.
+	TFunction<void()> OnMaceHit;
 
 private:
 	UPROPERTY(VisibleAnywhere)

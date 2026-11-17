@@ -36,6 +36,9 @@ struct FScorePopup
 	int32 Tier = 0;  // 0 = plain kill, 1..5 = COOL .. LEGENDARY
 	int32 Points = 0;
 	double Time = 0.0;
+
+	// How long a popup floats before it is dropped.
+	static constexpr double Lifetime = 1.2;
 };
 
 USTRUCT()

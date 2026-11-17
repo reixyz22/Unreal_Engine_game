@@ -12,7 +12,7 @@ namespace
 {
 	constexpr float CharsPerSecond = 45.f;
 	constexpr int32 CharsPerBlip = 3;
-	constexpr double PopupSeconds = 1.1;
+	constexpr double StoryPopupSeconds = 1.1;
 	// How close the hero must be to a prop's edge to use it.
 	constexpr double UseReach = 90.0;
 	// Blockers are shrunk a little so walking past furniture doesn't feel sticky.
@@ -50,7 +50,7 @@ void AStoryScene::Tick(float DeltaTime)
 	UpdateFocus();
 
 	const double Now = GetWorld()->GetTimeSeconds();
-	Popups.RemoveAll([Now](const FStoryPopup& Popup) { return Now - Popup.Time > PopupSeconds; });
+	Popups.RemoveAll([Now](const FStoryPopup& Popup) { return Now - Popup.Time > StoryPopupSeconds; });
 
 	if (const AStoryProp* Target = PointTarget.Get())
 	{
@@ -136,6 +136,27 @@ void AStoryScene::UpdateFocus()
 			FocusProp = Prop;
 		}
 	}
+}
+
+AStoryProp* AStoryScene::FindMaceTargetAt(const FVector& Point) const
+{
+	if (bLockInput || IsDialogOpen())
+	{
+		return nullptr;
+	}
+	for (AStoryProp* Prop : Props)
+	{
+		if (!Prop || !Prop->OnMaceHit)
+		{
+			continue;
+		}
+		const FVector Offset = Point - Prop->GetActorLocation();
+		if (FMath::Abs(Offset.X) <= Prop->GetHalfSize().X && FMath::Abs(Offset.Z) <= Prop->GetHalfSize().Y)
+		{
+			return Prop;
+		}
+	}
+	return nullptr;
 }
 
 bool AStoryScene::UseFocusProp()

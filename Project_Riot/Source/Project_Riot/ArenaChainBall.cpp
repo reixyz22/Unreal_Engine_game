@@ -47,6 +47,13 @@ void AArenaChainBall::Throw(AArenaPlayerPawn* InThrower, AArenaEnemy* InTarget, 
 	Damage = InDamage;
 }
 
+void AArenaChainBall::ThrowAt(AArenaPlayerPawn* InThrower, const FVector& Spot, const FChainLook& Look, float InSpeed, TFunction<void()> InOnArrive)
+{
+	Throw(InThrower, nullptr, Look, InSpeed, 0.f);
+	TargetSpot = Spot;
+	OnArrive = MoveTemp(InOnArrive);
+}
+
 bool AArenaChainBall::MoveToward(const FVector& Goal, float DeltaTime)
 {
 	FVector ToGoal = Goal - GetActorLocation();
@@ -75,6 +82,19 @@ void AArenaChainBall::Tick(float DeltaTime)
 
 	const FVector Hand = ThrowerPawn->GetHandLocation();
 	DrawChain(Hand);
+
+	if (State == EChainState::Outbound && TargetSpot.IsSet())
+	{
+		if (MoveToward(*TargetSpot, DeltaTime))
+		{
+			if (OnArrive)
+			{
+				OnArrive();
+			}
+			State = EChainState::Returning;
+		}
+		return;
+	}
 
 	if (State == EChainState::Outbound)
 	{

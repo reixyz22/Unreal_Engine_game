@@ -7,6 +7,7 @@
 #include "ArenaPlayerPawn.generated.h"
 
 class AArenaEnemy;
+class AStoryProp;
 class AStoryScene;
 class UCameraComponent;
 class UHealthComponent;
@@ -89,6 +90,7 @@ protected:
 	void UpdateMovement(float DeltaTime);
 	FVector2D ComputeMoveDirection();
 	void ThrowChainAt(AArenaEnemy* Target);
+	void ThrowChainAtProp(AStoryProp* Prop);
 	bool GetCursorWorldLocation(FVector& OutLocation) const;
 	AArenaEnemy* FindEnemyNear(const FVector& Point) const;
 	void UpdateAnimation(const FVector2D& Direction);

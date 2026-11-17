@@ -125,7 +125,7 @@ def tone(freq, length, shape="square", decay=6.0, vibrato=0.0):
 
 
 def story_sfx():
-    """Short UI and story sounds: phone buzz, text blip, bed smash, poof, stamp, coin, fanfare."""
+    """Short UI and story sounds: phone buzz, alarm, text blip, bed smash, poof, stamp, coin, fanfare."""
     buzz = []
     for burst in range(2):
         buzz += [math.sin(2 * math.pi * 150 * i / RATE) * (1 if (i // 220) % 2 else 0.4) for i in seconds(0.22)]
@@ -143,6 +143,12 @@ def story_sfx():
     poof = lowpass([rng.uniform(-1, 1) * math.sin(math.pi * i / (0.3 * RATE)) for i in seconds(0.3)], 0.25)
     write("SFX_Poof", poof + tone(1047, 0.1, "triangle") + tone(1568, 0.25, "triangle"), 0.5)
     write("SFX_Stamp", lowpass([rng.uniform(-1, 1) * math.exp(-i / RATE * 40) for i in seconds(0.15)], 0.3), 0.9)
+    alarm = []
+    for _ in range(3):
+        for _ in range(3):
+            alarm += tone(2093, 0.07, decay=4) + [0.0] * int(0.05 * RATE)
+        alarm += [0.0] * int(0.25 * RATE)
+    write("SFX_Alarm", alarm, 0.35)
     write("SFX_Coin", tone(988, 0.07, decay=10) + tone(1319, 0.3, decay=8), 0.4)
     fanfare = []
     for freq, length in ((523, 0.12), (659, 0.12), (784, 0.12), (1047, 0.5)):

@@ -23,7 +23,7 @@ TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 THEME_MUSIC = {"Dungeon": "/Game/Audio/BGM_Dungeon", "Space": "/Game/Audio/BGM_Space",
                "Town": "/Game/Audio/BGM_Town", "Map": "/Game/Audio/BGM_Map"}
 STORY_ART = "/Game/Art/Story"
-STORY_SOUNDS = ["PhoneBuzz", "Blip", "Select", "Smash", "Poof", "Stamp", "Coin", "Fanfare"]
+STORY_SOUNDS = ["PhoneBuzz", "Blip", "Select", "Smash", "Poof", "Stamp", "Coin", "Fanfare", "Alarm"]
 
 # Not characters: no glow, no outline.
 PLAIN_SPRITES = {"T_ArenaFloor_Sprite", "T_Player_Sprite", "T_Floor_NikkiWorld_Sprite", "T_Floor_Space_Sprite",

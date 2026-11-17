@@ -45,6 +45,8 @@ public:
 	FVector ResolveMove(const FVector& From, const FVector& To, float Radius) const;
 	// True during cutscenes and dialog; the hero ignores input.
 	bool BlocksInput() const { return bLockInput || IsDialogOpen(); }
+	// The hero can use props but not walk (still in bed, say).
+	bool BlocksMovement() const { return BlocksInput() || bHoldStill; }
 	// Uses the prop the hero is standing next to. Returns true if she should swing at it.
 	bool UseFocusProp();
 	// Plays a section of the script as dialog, then runs Then.
@@ -60,6 +62,8 @@ public:
 	const FPhoneView& GetPhone() const { return Phone; }
 	const TArray<FStoryPopup>& GetPopups() const { return Popups; }
 	const AStoryProp* GetFocusProp() const { return FocusProp.Get(); }
+	// The mace target under a world point (the cursor), if any.
+	AStoryProp* FindMaceTargetAt(const FVector& Point) const;
 
 protected:
 	// Called once, on the first frame the game is actually running (after any start menu).
@@ -86,6 +90,7 @@ protected:
 	FPhoneView Phone;
 	FString Objective;
 	bool bLockInput = false;
+	bool bHoldStill = false;
 	bool bLeaving = false;
 
 private:

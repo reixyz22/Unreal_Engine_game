@@ -41,6 +41,27 @@ def recolor(image, mapping):
 
 PJ = {(242, 238, 241): (150, 196, 255), (121, 119, 120): (92, 126, 214)}
 BOLT = (255, 226, 80)
+CAP = (150, 196, 255)
+CAP_DARK = (92, 126, 214)
+OUTLINE = (17, 17, 17)
+
+
+def add_nightcap(frame):
+    """A floppy nightcap with a pom, so the pyjamas read from across the room."""
+    pixels = frame.load()
+    # Her hair spans columns 4-11; the mace swing can rise above it, so only look there.
+    top = next(y for y in range(frame.height) if any(pixels[x, y][3] for x in range(4, 12)))
+    if top < 4:
+        return
+    rows = ((top - 1, 4, 11), (top - 2, 6, 11), (top - 3, 8, 12))
+    for y, left, right in rows:
+        for x in range(left, right + 1):
+            edge = x in (left, right)
+            pixels[x, y] = (*(OUTLINE if edge else CAP), 255)
+    pixels[7, top - 1] = (*CAP_DARK, 255)
+    pixels[9, top - 2] = (*BOLT, 255)
+    for x, y in ((13, top - 3), (13, top - 4), (14, top - 4)):
+        pixels[x, y] = (255, 255, 255, 255)
 
 
 def export_pyjamas():
@@ -54,6 +75,7 @@ def export_pyjamas():
                     # A sparse diagonal pattern of yellow on the pyjama cloth reads as bolts.
                     if pixels[x, y][:3] == (150, 196, 255) and (x + 2 * y) % 5 == 0:
                         pixels[x, y] = (*BOLT, 255)
+            add_nightcap(frame)
             save(frame, f"Nikki_PJ_{anim}_{index}")
 
 

@@ -5,7 +5,8 @@
 #include "HutScene.generated.h"
 
 // The hero's home. The first visit plays their intro.
-//   Nikki: Carl's text wakes her, she blocks him, smashes the bed, gets dressed, heads out.
+//   Nikki: Carl's text wakes her, she blocks him, her alarm goes off, she swings her mace
+//          out of bed, gets dressed, heads out.
 //   Carl: already up, he texts his crush, finds he's blocked, goes back to bed, and is
 //         woken later by his dog.
 UCLASS()
@@ -22,8 +23,8 @@ protected:
 private:
 	void PlayIntro();
 	void OnPhoneRead();
-	void WakeUp();
-	void SmashBed();
+	void SoundAlarm();
+	void SmashOutOfBed();
 	void GetDressed();
 
 	void PlayCarlIntro();

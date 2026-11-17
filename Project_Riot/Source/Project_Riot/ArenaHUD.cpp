@@ -47,7 +47,6 @@ namespace
 	// World map art is 256 x 352.
 	constexpr float MapAspect = 256.f / 352.f;
 	constexpr double FadeInSeconds = 0.8;
-	constexpr double PopupSeconds = 1.2;
 
 	// Combo callouts, in rainbow order.
 	const TCHAR* const ComboWords[] = { TEXT(""), TEXT("COOL!"), TEXT("RADICAL!"), TEXT("FANTASTIC!"), TEXT("SPECTACULAR!"), TEXT("LEGENDARY!") };
@@ -793,13 +792,13 @@ void AArenaHUD::DrawPopups(const AArenaGameMode& GameMode)
 	for (const FScorePopup& Popup : GameMode.GetPopups())
 	{
 		const float Age = float(Now - Popup.Time);
-		if (Age > PopupSeconds)
+		if (Age > FScorePopup::Lifetime)
 		{
 			continue;
 		}
 		const FVector Screen = Project(Popup.Where + FVector(0.0, 0.0, 60.0 + Age * 70.0));
 		FLinearColor Color = ComboColors[Popup.Tier];
-		Color.A = 1.f - Age / float(PopupSeconds);
+		Color.A = 1.f - Age / float(FScorePopup::Lifetime);
 		const float Scale = 1.f + Popup.Tier * 0.2f;
 		const FString Text = Popup.Tier > 0
 			? FString::Printf(TEXT("%s +%d"), ComboWords[Popup.Tier], Popup.Points)

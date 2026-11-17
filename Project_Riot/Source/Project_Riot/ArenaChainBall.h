@@ -35,6 +35,8 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	void Throw(AArenaPlayerPawn* InThrower, AArenaEnemy* InTarget, const FChainLook& Look, float InSpeed, float InDamage);
+	// Flies to a spot instead of an enemy (a story prop), runs OnArrive there, and comes back.
+	void ThrowAt(AArenaPlayerPawn* InThrower, const FVector& Spot, const FChainLook& Look, float InSpeed, TFunction<void()> InOnArrive);
 
 private:
 	bool MoveToward(const FVector& Goal, float DeltaTime);
@@ -54,6 +56,8 @@ private:
 	TWeakObjectPtr<AArenaPlayerPawn> Thrower;
 	TWeakObjectPtr<AArenaEnemy> Target;
 	TSet<TWeakObjectPtr<AArenaEnemy>> HitThisThrow;
+	TOptional<FVector> TargetSpot;
+	TFunction<void()> OnArrive;
 
 	EChainState State = EChainState::Outbound;
 	float Speed = 0.f;
