@@ -10,12 +10,15 @@ class UArenaLeaderboard;
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class AArenaPlayerPawn;
+class AStoryScene;
+struct FPhoneView;
 class UFont;
 class UHealthComponent;
 class UTexture2D;
 
 // All on-screen UI, drawn straight to the canvas each frame (see DECISIONS.md 007):
-// the start screens, the in-game HUD, the pause menu, and the death screens.
+// the start screens, the in-game HUD, story dialog, the world map, the shop,
+// the pause menu, and the death screens.
 UCLASS()
 class PROJECT_RIOT_API AArenaHUD : public AHUD
 {
@@ -27,6 +30,9 @@ public:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void DrawHUD() override;
+
+	// Opens the village stall's shop screen.
+	void OpenShop();
 
 private:
 	struct FBarState
@@ -45,6 +51,9 @@ private:
 		Initials,     // arcade initials entry for a top-10 score
 		Leaderboard,
 		Credits,
+		WorldMap,     // stage select
+		StageClear,
+		Shop,
 	};
 
 	struct FMenuButton
@@ -53,6 +62,7 @@ private:
 		FBox2D Rect;
 		TFunction<void()> Action;
 		UTexture2D* Icon = nullptr;
+		bool bDisabled = false;
 	};
 
 	struct FMenuSlider
@@ -69,6 +79,20 @@ private:
 	void DrawControls();
 	void DrawPauseMenu();
 	void DrawGameOver();
+	void DrawStory(const AStoryScene& Scene);
+	void DrawDialog(const AStoryScene& Scene);
+	void DrawPhone(const FPhoneView& Phone);
+	void DrawWorldMap();
+	void DrawStageClear();
+	void DrawShop();
+	void TickWorldMap();
+	void TickDebug();
+	void TravelToMapNode(int32 Index);
+	TArray<FString> WrapText(const FString& Text, float MaxWidth, UFont* Font, float Scale) const;
+	// Draws wrapped text, revealing at most MaxChars characters. Returns the height used.
+	float DrawWrapped(const FString& Text, float X, float Y, float MaxWidth, const FLinearColor& Color, float Scale, int32 MaxChars = MAX_int32);
+	void DrawShadowed(const FString& Text, float CenterX, float Y, const FLinearColor& Color, float Scale);
+	UTexture2D* StoryTexture(FName ArtName) const;
 	void DrawInitials();
 	void DrawLeaderboard();
 	void DrawCredits();
@@ -126,6 +150,9 @@ private:
 	TArray<FMenuSlider> MenuSliders;
 	EScreen CurrentScreen = EScreen::Playing;
 	EScreen CreditsReturnTo = EScreen::Paused;
+	int32 MapSelection = 0;
+	float PhoneSlide = 0.f;
+	double ClearNoticedAt = -1.0;
 	double DeathNoticedAt = -1.0;
 	double FadeInFrom = -1.0;
 	int32 NewEntryRank = INDEX_NONE;

@@ -45,7 +45,7 @@ void AArenaProjectile::Tick(float DeltaTime)
 	Offset.Y = 0.f;
 	if (Offset.Size() < Player->GetRadius() + HitRadius)
 	{
-		Player->ReceiveDamage(Damage);
+		Player->ReceiveDamage(Damage, EDamageType::Physical);
 		Destroy();
 	}
 }

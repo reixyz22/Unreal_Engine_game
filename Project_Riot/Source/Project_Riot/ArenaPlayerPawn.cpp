@@ -5,6 +5,7 @@
 #include "ArenaEnemy.h"
 #include "ArenaGameMode.h"
 #include "ArenaSession.h"
+#include "ArenaShop.h"
 #include "ArenaShockwave.h"
 #include "ArenaTheme.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -22,6 +23,7 @@
 #include "PaperFlipbook.h"
 #include "PaperFlipbookComponent.h"
 #include "PaperSpriteComponent.h"
+#include "StoryScene.h"
 
 namespace
 {
@@ -89,10 +91,17 @@ AArenaPlayerPawn::AArenaPlayerPawn()
 	ApplyArenaLook(Camera->PostProcessSettings);
 
 	Health = CreateDefaultSubobject<UHealthComponent>(TEXT("Health"));
+
+	BaseStats.MaxHealth = 100.f;
+	BaseStats.AttackDamage = 16.f;
+	BaseStats.AbilityPower = 16.f;
+	BaseStats.MoveSpeed = 400.f;
 }
 
 void AArenaPlayerPawn::BeginPlay()
 {
+	// Health reads its max when it begins play, so stats come first.
+	RefreshStats();
 	Super::BeginPlay();
 
 	FVector Start = GetActorLocation();
@@ -109,12 +118,16 @@ void AArenaPlayerPawn::BeginPlay()
 			Fog->SetVectorParameterValue(ArenaArt::FogColorParam, GameMode->GetTheme().FogColor);
 			Fog->SetScalarParameterValue(ArenaArt::FogDensityParam, GameMode->GetTheme().FogDensity);
 		}
+		// Fog belongs to combat stages; the hut and the village are clear.
+		const AArenaGameMode* Mode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+		bFogEnabled = Mode && Mode->IsCombatStage();
 		Camera->PostProcessSettings.AddBlendable(Fog, bFogEnabled ? 1.f : 0.f);
 	}
 	Body->SetFlipbook(IdleAnim);
 	Body->SetSpriteColor(BodyTint);
 	HeldFlail->SetSprite(FlailHandleSprite);
 	Guitar->SetSprite(GuitarSprite);
+	Guitar->SetVisibility(HasSpecial());
 
 	Health->OnDepleted.AddUObject(this, &AArenaPlayerPawn::Die);
 }
@@ -183,6 +196,17 @@ void AArenaPlayerPawn::Tick(float DeltaTime)
 		return;
 	}
 
+	const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+	if (AStoryScene* Scene = GameMode ? GameMode->GetScene() : nullptr)
+	{
+		TickStoryScene(*Scene);
+		return;
+	}
+	if (GameMode && !GameMode->IsCombatStage())
+	{
+		return;
+	}
+
 	UpdateHover();
 	const APlayerController* PlayerController = Cast<APlayerController>(GetController());
 	if (PlayerController && !IsRooted())
@@ -200,6 +224,52 @@ void AArenaPlayerPawn::Tick(float DeltaTime)
 	UpdateMovement(DeltaTime);
 	UpdateGuitar();
 	UpdateBlink();
+}
+
+void AArenaPlayerPawn::TickStoryScene(AStoryScene& Scene)
+{
+	// No combat here: walk around, and use whatever she is standing next to.
+	const APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	const bool bUse = PlayerController && (PlayerController->WasInputKeyJustPressed(EKeys::RightMouseButton) || PlayerController->WasInputKeyJustPressed(EKeys::E));
+	if (bUse && Scene.UseFocusProp())
+	{
+		PlayStrike();
+		UArenaSession::PlaySfx(this, ThrowSound);
+	}
+
+	const FVector2D Direction = Scene.BlocksInput() ? FVector2D::ZeroVector : MoveInput.GetClampedToMaxSize(1.0);
+	const FVector From = GetActorLocation();
+	const FVector Wanted = From + FVector(Direction.X, 0.0, Direction.Y) * Stats.MoveSpeed * GetWorld()->GetDeltaSeconds();
+	SetActorLocation(Scene.ResolveMove(From, Wanted, Collision->GetScaledSphereRadius()));
+	UpdateAnimation(Direction);
+}
+
+UPaperFlipbook* AArenaPlayerPawn::Outfit(UPaperFlipbook* Normal, UPaperFlipbook* Pyjama) const
+{
+	return bPyjamas && Pyjama ? Pyjama : Normal;
+}
+
+void AArenaPlayerPawn::SetPyjamas(bool bWear)
+{
+	bPyjamas = bWear;
+}
+
+void AArenaPlayerPawn::RefreshStats()
+{
+	// Base stats plus everything bought at the stall.
+	Stats = BaseStats;
+	if (const UArenaSession* Session = UArenaSession::Get(this))
+	{
+		Stats.Add(ArenaShop::TotalBonus(*Session), 1);
+	}
+	Health->SetMaxHealth(Stats.MaxHealth);
+	Guitar->SetVisibility(HasSpecial());
+}
+
+bool AArenaPlayerPawn::HasSpecial() const
+{
+	const UArenaSession* Session = UArenaSession::Get(this);
+	return Session && Session->Owns(ArenaShop::Guitar);
 }
 
 void AArenaPlayerPawn::UpdateHover()
@@ -265,8 +335,8 @@ void AArenaPlayerPawn::UpdateMovement(float DeltaTime)
 	const FVector2D Direction = IsRooted() ? FVector2D::ZeroVector : ComputeMoveDirection();
 
 	FVector Location = GetActorLocation();
-	Location.X += Direction.X * MoveSpeed * DeltaTime;
-	Location.Z += Direction.Y * MoveSpeed * DeltaTime;
+	Location.X += Direction.X * Stats.MoveSpeed * DeltaTime;
+	Location.Z += Direction.Y * Stats.MoveSpeed * DeltaTime;
 
 	const double Limit = ArenaArt::ArenaHalfSize - ArenaArt::WallThickness - Collision->GetScaledSphereRadius();
 	Location.X = FMath::Clamp(Location.X, -Limit, Limit);
@@ -314,7 +384,7 @@ void AArenaPlayerPawn::ThrowChainAt(AArenaEnemy* Target)
 
 	if (AArenaChainBall* Ball = GetWorld()->SpawnActor<AArenaChainBall>(SpawnAt, FRotator::ZeroRotator))
 	{
-		Ball->Throw(this, Target, { ChainBallSprite, ChainLinkSprite, ChainHitSound }, ChainSpeed, AutoDamage);
+		Ball->Throw(this, Target, { ChainBallSprite, ChainLinkSprite, ChainHitSound }, ChainSpeed, Stats.AttackDamage * AutoDamageRatio);
 		bChainOut = true;
 		PlayStrike();
 		UArenaSession::PlaySfx(this, ThrowSound);
@@ -348,7 +418,7 @@ AArenaEnemy* AArenaPlayerPawn::FindEnemyNear(const FVector& Point) const
 
 void AArenaPlayerPawn::CastSpecial()
 {
-	if (Mana < SpecialManaCost)
+	if (!HasSpecial() || Mana < SpecialManaCost)
 	{
 		return;
 	}
@@ -374,7 +444,7 @@ void AArenaPlayerPawn::UpdateSpecial()
 	bBurstPending = false;
 	if (AArenaShockwave* Shock = GetWorld()->SpawnActor<AArenaShockwave>(GetActorLocation(), FRotator::ZeroRotator))
 	{
-		Shock->Launch(ShockBurstSprite, SpecialDamage, SpecialRadius, SpecialSeconds);
+		Shock->Launch(ShockBurstSprite, Stats.AbilityPower * SpecialDamageRatio, SpecialRadius, SpecialSeconds);
 	}
 }
 
@@ -386,9 +456,9 @@ void AArenaPlayerPawn::UpdateGuitar()
 	Guitar->SetRelativeRotation(FRotator(bStrumming ? FMath::Sin(Now * 40.0) * 12.0 : 0.0, 0.0, 0.0));
 }
 
-bool AArenaPlayerPawn::ReceiveStunHit(float Amount, float StunSeconds)
+bool AArenaPlayerPawn::ReceiveStunHit(float Amount, EDamageType Type, float StunSeconds)
 {
-	if (!Health->ApplyDamage(Amount))
+	if (!ReceiveDamage(Amount, Type))
 	{
 		return false;
 	}
@@ -442,9 +512,9 @@ void AArenaPlayerPawn::OnChainReturned()
 	bChainOut = false;
 }
 
-bool AArenaPlayerPawn::ReceiveDamage(float Amount)
+bool AArenaPlayerPawn::ReceiveDamage(float Amount, EDamageType Type)
 {
-	return Health->ApplyDamage(Amount);
+	return Health->ApplyDamage(Stats.Mitigate(Amount, Type));
 }
 
 float AArenaPlayerPawn::GetRadius() const
@@ -459,15 +529,16 @@ FVector AArenaPlayerPawn::GetHandLocation() const
 
 void AArenaPlayerPawn::PlayStrike()
 {
-	if (!StrikeAnim)
+	UPaperFlipbook* Strike = Outfit(StrikeAnim, PyjamaStrike);
+	if (!Strike)
 	{
 		return;
 	}
 
-	Body->SetFlipbook(StrikeAnim);
+	Body->SetFlipbook(Strike);
 	Body->SetLooping(false);
 	Body->PlayFromStart();
-	StrikeEndsAt = GetWorld()->GetTimeSeconds() + StrikeAnim->GetTotalDuration();
+	StrikeEndsAt = GetWorld()->GetTimeSeconds() + Strike->GetTotalDuration();
 }
 
 void AArenaPlayerPawn::UpdateAnimation(const FVector2D& Direction)
@@ -477,7 +548,7 @@ void AArenaPlayerPawn::UpdateAnimation(const FVector2D& Direction)
 	if (!bStriking)
 	{
 		const bool bMoving = !Direction.IsNearlyZero();
-		UPaperFlipbook* Wanted = (bMoving && RunAnim) ? RunAnim.Get() : IdleAnim.Get();
+		UPaperFlipbook* Wanted = (bMoving && RunAnim) ? Outfit(RunAnim, PyjamaRun) : Outfit(IdleAnim, PyjamaIdle);
 		if (Body->GetFlipbook() != Wanted)
 		{
 			Body->SetFlipbook(Wanted);

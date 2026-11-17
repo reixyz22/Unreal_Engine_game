@@ -6,6 +6,7 @@
 #include "ArenaLeaderboard.h"
 #include "ArenaPlayerPawn.h"
 #include "ArenaSession.h"
+#include "ArenaShop.h"
 #include "ArenaTheme.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
@@ -18,6 +19,8 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "PaperFlipbookComponent.h"
 #include "PaperSprite.h"
+#include "StoryProp.h"
+#include "StoryScene.h"
 
 namespace
 {
@@ -38,6 +41,9 @@ namespace
 	constexpr float PanelCorner = 8.f;
 	constexpr float ButtonCorner = 4.f;
 	constexpr double DeathScreenDelay = 1.2;
+	constexpr double StageClearDelay = 1.0;
+	// World map art is 256 x 352.
+	constexpr float MapAspect = 256.f / 352.f;
 	constexpr double FadeInSeconds = 0.8;
 	constexpr double PopupSeconds = 1.2;
 
@@ -81,11 +87,28 @@ void AArenaHUD::BeginPlay()
 	Super::BeginPlay();
 
 	// The start screens show once per launch; restarts after a death go straight to play.
-	const UArenaSession* Session = UArenaSession::Get(this);
-	const bool bIntro = Session && !Session->bIntroDone;
-	ShowScreen(bIntro ? EScreen::ChooseHero : EScreen::Playing);
-	if (!bIntro)
+	UArenaSession* Session = UArenaSession::Get(this);
+	const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+	const EArenaScene Scene = GameMode ? GameMode->GetSceneKind() : EArenaScene::Stage;
+	if (Session && !Session->bIntroDone)
 	{
+		ShowScreen(EScreen::ChooseHero);
+	}
+	else if (Scene == EArenaScene::WorldMap)
+	{
+		// Arriving from the village puts the marker on it; otherwise on the stage just played.
+		MapSelection = Session->PreviousScene == EArenaScene::Town ? 0 : FMath::Clamp(Session->StageIndex, 0, Session->HighestUnlocked);
+		ShowScreen(EScreen::WorldMap);
+	}
+	else if (Scene == EArenaScene::Stage && Session && !Session->bControlsShown)
+	{
+		// How to play shows once, before the first fight.
+		Session->bControlsShown = true;
+		ShowScreen(EScreen::Controls);
+	}
+	else
+	{
+		ShowScreen(EScreen::Playing);
 		FadeInFrom = GetWorld()->GetRealTimeSeconds();
 	}
 }
@@ -97,6 +120,8 @@ void AArenaHUD::Tick(float DeltaSeconds)
 	{
 		return;
 	}
+
+	TickDebug();
 
 	// Escape in a packaged game; P too, because Escape stops Play-In-Editor.
 	const bool bPauseKey = PlayerOwner->WasInputKeyJustPressed(EKeys::Escape) || PlayerOwner->WasInputKeyJustPressed(EKeys::P);
@@ -123,7 +148,17 @@ void AArenaHUD::Tick(float DeltaSeconds)
 	case EScreen::Playing:
 	{
 		const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
-		if (GameMode && GameMode->IsPlayerDead())
+		if (GameMode && GameMode->IsStageCleared())
+		{
+			const double Now = GetWorld()->GetRealTimeSeconds();
+			ClearNoticedAt = ClearNoticedAt < 0.0 ? Now : ClearNoticedAt;
+			if (Now - ClearNoticedAt > StageClearDelay)
+			{
+				UArenaSession::PlaySfx(this, GameMode->GetStorySound(TEXT("Fanfare")));
+				ShowScreen(EScreen::StageClear);
+			}
+		}
+		else if (GameMode && GameMode->IsPlayerDead())
 		{
 			// Let the death read for a moment, then the death screen.
 			const double Now = GetWorld()->GetRealTimeSeconds();
@@ -143,9 +178,27 @@ void AArenaHUD::Tick(float DeltaSeconds)
 	case EScreen::Initials:
 		TickInitials();
 		break;
+	case EScreen::WorldMap:
+		TickWorldMap();
+		if (bClicked)
+		{
+			ClickMenu(GetMouse());
+		}
+		break;
+	case EScreen::Shop:
+		if (bPauseKey)
+		{
+			ShowScreen(EScreen::Playing);
+		}
+		else if (bClicked)
+		{
+			ClickMenu(GetMouse());
+		}
+		break;
 	case EScreen::GameOver:
 	case EScreen::Leaderboard:
 	case EScreen::Credits:
+	case EScreen::StageClear:
 		if (bClicked)
 		{
 			ClickMenu(GetMouse());
@@ -172,19 +225,23 @@ void AArenaHUD::DrawHUD()
 {
 	Super::DrawHUD();
 
-	DrawHealthBars();
-
 	const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
-	if (GameMode)
+	const AArenaPlayerPawn* Hero = Cast<AArenaPlayerPawn>(GetOwningPawn());
+	if (GameMode && GameMode->IsCombatStage())
 	{
+		DrawHealthBars();
 		DrawWaveBanner(*GameMode);
 		DrawPopups(*GameMode);
 		DrawScore(*GameMode);
+		if (Hero)
+		{
+			DrawSpecialsBar(*Hero);
+			DrawStunStars(*Hero);
+		}
 	}
-	if (const AArenaPlayerPawn* Hero = Cast<AArenaPlayerPawn>(GetOwningPawn()))
+	else if (const AStoryScene* Scene = GameMode ? GameMode->GetScene() : nullptr)
 	{
-		DrawSpecialsBar(*Hero);
-		DrawStunStars(*Hero);
+		DrawStory(*Scene);
 	}
 	switch (CurrentScreen)
 	{
@@ -195,7 +252,17 @@ void AArenaHUD::DrawHUD()
 	case EScreen::Initials: DrawInitials(); break;
 	case EScreen::Leaderboard: DrawLeaderboard(); break;
 	case EScreen::Credits: DrawCredits(); break;
+	case EScreen::WorldMap: DrawWorldMap(); break;
+	case EScreen::StageClear: DrawStageClear(); break;
+	case EScreen::Shop: DrawShop(); break;
 	default: break;
+	}
+
+	const UArenaSession* Session = UArenaSession::Get(this);
+	if (Session && Session->bDebug)
+	{
+		DrawText(TEXT("DEBUG   F2 +mana   F3 +5000 gold   F4 clear wave   F5 unlock all   F6 world map   (F1 off)"),
+			FLinearColor(0.4f, 1.f, 0.5f), 12.f, Canvas->ClipY - 24.f, GEngine->GetSmallFont(), 1.f);
 	}
 
 	// Restarts fade in from black so a new run reads as a continuation, not a cut.
@@ -242,7 +309,7 @@ void AArenaHUD::DrawWaveBanner(const AArenaGameMode& GameMode)
 	// Lay out "WAVE 3 [ icon x2 + icon x3 ]" left to right, measured first so it can be centered.
 	struct FPiece { FString Text; TSubclassOf<AArenaEnemy> Icon; };
 	TArray<FPiece> Pieces;
-	Pieces.Add({ FString::Printf(TEXT("%sWAVE %d  [ "), GameMode.IsWaveIncoming() ? TEXT("INCOMING  ") : TEXT(""), GameMode.GetBannerWave()) });
+	Pieces.Add({ FString::Printf(TEXT("%sWAVE %d / %d  [ "), GameMode.IsWaveIncoming() ? TEXT("INCOMING  ") : TEXT(""), GameMode.GetBannerWave(), GameMode.GetStageWaves()) });
 	const TArray<FWaveGroup>& Groups = GameMode.GetBannerGroups();
 	for (int32 Index = 0; Index < Groups.Num(); ++Index)
 	{
@@ -284,6 +351,11 @@ void AArenaHUD::DrawWaveBanner(const AArenaGameMode& GameMode)
 
 void AArenaHUD::DrawSpecialsBar(const AArenaPlayerPawn& Hero)
 {
+	if (!Hero.HasSpecial())
+	{
+		return;
+	}
+
 	// Bottom-middle bar of special slots (Q for now), each with its key and mana pips.
 	// Health is already over Nikki's head, and the camera keeps her centred.
 	constexpr float Slot = 120.f;       // slots are wide and short
@@ -403,7 +475,8 @@ void AArenaHUD::ShowScreen(EScreen NewScreen)
 
 	if (UArenaSession* Session = UArenaSession::Get(this))
 	{
-		Session->SetMusicDucked(bMenu);
+		// The map and the shop are places, not pauses: music stays at full volume.
+		Session->SetMusicDucked(bMenu && NewScreen != EScreen::WorldMap && NewScreen != EScreen::Shop);
 		Session->bIntroDone |= NewScreen == EScreen::Playing;
 	}
 }
@@ -426,7 +499,7 @@ UFont* AArenaHUD::GetMenuFont() const
 void AArenaHUD::DrawPanel(float X, float Y, float Width, float Height, const FString& Title)
 {
 	// The start screens hide the stage entirely; the pause menu dims it and takes the theme's tint.
-	const bool bStartScreen = CurrentScreen == EScreen::ChooseHero || CurrentScreen == EScreen::Controls;
+	const bool bStartScreen = CurrentScreen == EScreen::ChooseHero || CurrentScreen == EScreen::Controls || CurrentScreen == EScreen::WorldMap;
 	if (bStartScreen && BackdropTexture)
 	{
 		const float Tile = BackdropTexture->GetSizeX() * UiScale;
@@ -461,7 +534,7 @@ void AArenaHUD::DrawButton(FMenuButton& Button, const FVector2D& Mouse)
 	if (ButtonTexture)
 	{
 		DrawNineSlice(ButtonTexture, ButtonCorner, Min.X, Min.Y, Size.X, Size.Y,
-			bHovered ? FLinearColor(1.12f, 1.08f, 0.95f) : FLinearColor(0.92f, 0.9f, 0.88f));
+			Button.bDisabled ? FLinearColor(0.5f, 0.48f, 0.46f) : bHovered ? FLinearColor(1.12f, 1.08f, 0.95f) : FLinearColor(0.92f, 0.9f, 0.88f));
 	}
 	else
 	{
@@ -538,7 +611,9 @@ void AArenaHUD::DrawHeroSelect()
 				{
 					Mode->ChooseHero(Hero);
 				}
-				ShowScreen(EScreen::Controls);
+				// Straight into the story; how-to-play waits for the first fight.
+				ShowScreen(EScreen::Playing);
+				FadeInFrom = GetWorld()->GetRealTimeSeconds();
 			},
 			Portrait ? Portrait->GetBakedTexture() : nullptr });
 		DrawButton(Card, GetMouse());
@@ -586,6 +661,10 @@ void AArenaHUD::DrawPauseMenu()
 		FBox2D(), [Hero]() { Hero->SetClickToMove(!Hero->IsClickToMove()); } });
 	MenuButtons.Add({ FString::Printf(TEXT("Fog: %s"), Hero->IsFogEnabled() ? TEXT("On") : TEXT("Off")),
 		FBox2D(), [Hero]() { Hero->SetFogEnabled(!Hero->IsFogEnabled()); } });
+	if (Session->bContractSigned)
+	{
+		MenuButtons.Add({ TEXT("World map"), FBox2D(), [this, Session]() { Session->Travel(this, EArenaScene::WorldMap); } });
+	}
 	MenuButtons.Add({ TEXT("Credits"), FBox2D(), [this]() { CreditsReturnTo = EScreen::Paused; ShowScreen(EScreen::Credits); } });
 	MenuButtons.Add({ TEXT("Quit"), FBox2D(), [this]() { UKismetSystemLibrary::QuitGame(this, PlayerOwner, EQuitPreference::Quit, false); } });
 
@@ -624,7 +703,7 @@ void AArenaHUD::ClickMenu(const FVector2D& Mouse)
 {
 	for (const FMenuButton& Button : MenuButtons)
 	{
-		if (Button.Rect.IsInside(Mouse))
+		if (Button.Rect.IsInside(Mouse) && !Button.bDisabled)
 		{
 			Button.Action();
 			return;
@@ -732,6 +811,7 @@ void AArenaHUD::DrawGameOver()
 			Mode->RestartArena();
 		}
 	} });
+	MenuButtons.Add({ TEXT("World map"), FBox2D(), [this]() { UArenaSession::Get(this)->Travel(this, EArenaScene::WorldMap); } });
 	MenuButtons.Add({ TEXT("Leaderboard"), FBox2D(), [this]() { ShowScreen(EScreen::Leaderboard); } });
 	MenuButtons.Add({ TEXT("Credits"), FBox2D(), [this]() { CreditsReturnTo = EScreen::GameOver; ShowScreen(EScreen::Credits); } });
 	MenuButtons.Add({ TEXT("Quit"), FBox2D(), [this]() { UKismetSystemLibrary::QuitGame(this, PlayerOwner, EQuitPreference::Quit, false); } });
@@ -864,6 +944,483 @@ void AArenaHUD::DrawCredits()
 		RowY += Row;
 	}
 	DrawMenuButtons((Canvas->ClipX - 240.f) * 0.5f, Y + Height - 80.f, 240.f);
+}
+
+// ---------------------------------------------------------------- story
+
+UTexture2D* AArenaHUD::StoryTexture(FName ArtName) const
+{
+	const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+	const UPaperSprite* Sprite = GameMode ? GameMode->GetStoryArt(ArtName) : nullptr;
+	return Sprite ? Sprite->GetBakedTexture() : nullptr;
+}
+
+void AArenaHUD::DrawShadowed(const FString& Text, float CenterX, float Y, const FLinearColor& Color, float Scale)
+{
+	DrawCentered(Text, CenterX + 2.f, Y + 2.f, FLinearColor(0.f, 0.f, 0.f, Color.A * 0.85f), Scale, GetMenuFont());
+	DrawCentered(Text, CenterX, Y, Color, Scale, GetMenuFont());
+}
+
+TArray<FString> AArenaHUD::WrapText(const FString& Text, float MaxWidth, UFont* Font, float Scale) const
+{
+	TArray<FString> Words;
+	Text.ParseIntoArray(Words, TEXT(" "));
+
+	TArray<FString> Rows;
+	FString Row;
+	for (const FString& Word : Words)
+	{
+		const FString Longer = Row.IsEmpty() ? Word : Row + TEXT(" ") + Word;
+		float Width, Height;
+		GetTextSize(Longer, Width, Height, Font, Scale);
+		if (Width > MaxWidth && !Row.IsEmpty())
+		{
+			Rows.Add(Row);
+			Row = Word;
+		}
+		else
+		{
+			Row = Longer;
+		}
+	}
+	if (!Row.IsEmpty())
+	{
+		Rows.Add(Row);
+	}
+	return Rows;
+}
+
+float AArenaHUD::DrawWrapped(const FString& Text, float X, float Y, float MaxWidth, const FLinearColor& Color, float Scale, int32 MaxChars)
+{
+	// Wrap the whole text first, then reveal characters, so words never jump rows mid-typing.
+	UFont* Font = GetMenuFont();
+	float Width, RowHeight;
+	GetTextSize(TEXT("Ag"), Width, RowHeight, Font, Scale);
+	RowHeight += 6.f;
+
+	const TArray<FString> Rows = WrapText(Text, MaxWidth, Font, Scale);
+	for (int32 Index = 0; Index < Rows.Num() && MaxChars > 0; ++Index)
+	{
+		DrawText(Rows[Index].Left(MaxChars), Color, X, Y + Index * RowHeight, Font, Scale);
+		MaxChars -= Rows[Index].Len() + 1;
+	}
+	return Rows.Num() * RowHeight;
+}
+
+void AArenaHUD::DrawStory(const AStoryScene& Scene)
+{
+	// What to do next, top-centre.
+	if (!Scene.GetObjective().IsEmpty() && !Scene.IsDialogOpen() && !Scene.GetPhone().bShown)
+	{
+		DrawShadowed(Scene.GetObjective(), Canvas->ClipX * 0.5f, 26.f, Gold, 1.3f);
+	}
+
+	// A prompt over whatever she can use right now.
+	if (const AStoryProp* Prop = Scene.GetFocusProp())
+	{
+		const FVector Screen = Project(Prop->GetActorLocation() + FVector(0.0, 0.0, Prop->GetHalfSize().Y + 14.0));
+		DrawShadowed(FString::Printf(TEXT("[E]  %s"), *Prop->Prompt), Screen.X, Screen.Y - 30.f, FLinearColor::White, 1.1f);
+	}
+
+	// Comic callouts ("WHAM!") rise and fade.
+	const double Now = GetWorld()->GetTimeSeconds();
+	for (const FStoryPopup& Popup : Scene.GetPopups())
+	{
+		const float Age = float(Now - Popup.Time);
+		const FVector Screen = Project(Popup.Where + FVector(0.0, 0.0, 90.0 + Age * 90.0));
+		FLinearColor Color = WaveYellow;
+		Color.A = FMath::Clamp(1.4f - Age, 0.f, 1.f);
+		DrawShadowed(Popup.Text, Screen.X, Screen.Y, Color, 2.4f);
+	}
+
+	// The phone eases up from the bottom of the screen and back down.
+	PhoneSlide = FMath::FInterpTo(PhoneSlide, Scene.GetPhone().bShown ? 1.f : 0.f, GetWorld()->GetDeltaSeconds(), 7.f);
+	if (PhoneSlide > 0.01f)
+	{
+		DrawPhone(Scene.GetPhone());
+	}
+	if (Scene.IsDialogOpen())
+	{
+		DrawDialog(Scene);
+	}
+}
+
+void AArenaHUD::DrawDialog(const AStoryScene& Scene)
+{
+	const float Width = FMath::Min(940.f, Canvas->ClipX - 60.f);
+	constexpr float Height = 176.f;
+	const float X = (Canvas->ClipX - Width) * 0.5f;
+	const float Y = Canvas->ClipY - Height - 24.f;
+	if (PanelTexture)
+	{
+		DrawNineSlice(PanelTexture, PanelCorner, X, Y, Width, Height, FLinearColor::White);
+	}
+	else
+	{
+		DrawBox(X, Y, Width, Height, Wood, WoodEdge, 5.f);
+	}
+
+	// Portrait on the left, scaled by a whole number so the pixels stay crisp.
+	float TextX = X + 34.f;
+	const UPaperSprite* Portrait = Scene.GetPortrait();
+	if (UTexture2D* Texture = Portrait ? Portrait->GetBakedTexture() : nullptr)
+	{
+		constexpr float Box = 120.f;
+		const float Scale = FMath::Max(1.f, FMath::FloorToFloat(FMath::Min(Box / Texture->GetSizeX(), Box / Texture->GetSizeY())));
+		const float W = Texture->GetSizeX() * Scale;
+		const float H = Texture->GetSizeY() * Scale;
+		DrawRect(BarBacking, X + 26.f, Y + 26.f, Box, Box);
+		DrawTexture(Texture, X + 26.f + (Box - W) * 0.5f, Y + 26.f + (Box - H), W, H, 0.f, 0.f, 1.f, 1.f, FLinearColor::White, BLEND_Translucent);
+		TextX = X + 26.f + Box + 22.f;
+	}
+
+	const FStoryLine& Line = Scene.GetLine();
+	DrawText(Line.Speaker, Gold, TextX, Y + 24.f, GetMenuFont(), 1.25f);
+	DrawRect(Gold * 0.6f, TextX, Y + 56.f, Width - (TextX - X) - 34.f, 2.f);
+	DrawWrapped(Line.Text, TextX, Y + 68.f, Width - (TextX - X) - 34.f, Parchment, 1.1f, Scene.GetCharsShown());
+
+	if (Scene.GetCharsShown() >= Line.Text.Len())
+	{
+		const float Blink = 0.5f + 0.5f * FMath::Sin(GetWorld()->GetRealTimeSeconds() * 6.f);
+		DrawText(TEXT("Space"), Gold * Blink, X + Width - 96.f, Y + Height - 40.f, GEngine->GetSmallFont(), 1.2f);
+	}
+}
+
+void AArenaHUD::DrawPhone(const FPhoneView& Phone)
+{
+	// Phone_UI.png is 84 x 150: a 5 px bezel, a header bar from row 12 to 24, screen to row 134.
+	UTexture2D* Frame = StoryTexture(TEXT("Phone_UI"));
+	if (!Frame)
+	{
+		return;
+	}
+	const float Scale = FMath::Min(3.8f, (Canvas->ClipY - 30.f) / 150.f);
+	const float Width = 84.f * Scale;
+	const float Height = 150.f * Scale;
+	const float Eased = FMath::InterpEaseOut(0.f, 1.f, PhoneSlide, 2.f);
+	const float X = Canvas->ClipX * 0.66f - Width * 0.5f;
+	const float Y = FMath::Lerp(Canvas->ClipY + 10.f, Canvas->ClipY - Height - 14.f, Eased);
+	DrawTexture(Frame, X, Y, Width, Height, 0.f, 0.f, 1.f, 1.f, FLinearColor::White, BLEND_Translucent);
+
+	const float ScreenX = X + 5.f * Scale;
+	const float ScreenW = 74.f * Scale;
+	const float HeaderY = Y + 12.f * Scale;
+	const float HeaderH = 12.f * Scale;
+	if (UTexture2D* Pfp = StoryTexture(TEXT("Carl_Pfp")))
+	{
+		DrawTexture(Pfp, ScreenX + 6.f, HeaderY + 3.f, HeaderH - 6.f, HeaderH - 6.f, 0.f, 0.f, 1.f, 1.f, FLinearColor::White, BLEND_Translucent);
+	}
+	DrawText(Phone.Sender, FLinearColor::White, ScreenX + HeaderH + 8.f, HeaderY + HeaderH * 0.5f - 10.f, GetMenuFont(), 1.f);
+
+	// The message bubble, with a big profile picture above it so the "catch" is readable.
+	float BubbleY = HeaderY + HeaderH + 14.f;
+	if (UTexture2D* Pfp = StoryTexture(TEXT("Carl_Pfp")))
+	{
+		constexpr float Big = 96.f;
+		DrawTexture(Pfp, ScreenX + (ScreenW - Big) * 0.5f, BubbleY, Big, Big, 0.f, 0.f, 1.f, 1.f, FLinearColor::White, BLEND_Translucent);
+		BubbleY += Big + 12.f;
+	}
+	const float BubbleX = ScreenX + 10.f;
+	const float BubbleW = ScreenW - 20.f;
+	const int32 Rows = WrapText(Phone.Message, BubbleW - 20.f, GetMenuFont(), 0.9f).Num();
+	DrawRect(FLinearColor(0.75f, 0.8f, 0.9f), BubbleX, BubbleY, BubbleW, Rows * 26.f + 20.f);
+	DrawWrapped(Phone.Message, BubbleX + 10.f, BubbleY + 10.f, BubbleW - 20.f, FLinearColor(0.08f, 0.08f, 0.12f), 0.9f, FMath::FloorToInt32(Phone.CharsShown));
+
+	if (Phone.bBlocked)
+	{
+		const float BandY = Y + Height * 0.5f - 30.f;
+		DrawRect(FLinearColor(0.8f, 0.08f, 0.12f, 0.95f), ScreenX, BandY, ScreenW, 60.f);
+		DrawCentered(TEXT("BLOCKED"), ScreenX + ScreenW * 0.5f, BandY + 12.f, FLinearColor::White, 1.6f, GetMenuFont());
+	}
+}
+
+// ---------------------------------------------------------------- world map
+
+void AArenaHUD::TravelToMapNode(int32 Index)
+{
+	UArenaSession* Session = UArenaSession::Get(this);
+	if (!Session || Index > Session->HighestUnlocked)
+	{
+		return;
+	}
+	UArenaSession::PlaySfx(this, GetWorld()->GetAuthGameMode<AArenaGameMode>()->GetStorySound(TEXT("Select")));
+	// Stop 0 is the home village; every other stop is a combat stage.
+	Session->Travel(this, Index == 0 ? EArenaScene::Town : EArenaScene::Stage, Index);
+}
+
+void AArenaHUD::TickWorldMap()
+{
+	const UArenaSession* Session = UArenaSession::Get(this);
+	const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+	if (!Session || !GameMode)
+	{
+		return;
+	}
+	auto Pressed = [this](const FKey& A, const FKey& B) { return PlayerOwner->WasInputKeyJustPressed(A) || PlayerOwner->WasInputKeyJustPressed(B); };
+	const int32 Last = FMath::Min(Session->HighestUnlocked, GameMode->GetRoute().Num() - 1);
+	if (Pressed(EKeys::S, EKeys::D) || Pressed(EKeys::Down, EKeys::Right))
+	{
+		MapSelection = FMath::Min(MapSelection + 1, Last);
+	}
+	if (Pressed(EKeys::W, EKeys::A) || Pressed(EKeys::Up, EKeys::Left))
+	{
+		MapSelection = FMath::Max(MapSelection - 1, 0);
+	}
+	if (Pressed(EKeys::Enter, EKeys::SpaceBar))
+	{
+		TravelToMapNode(MapSelection);
+	}
+}
+
+void AArenaHUD::DrawWorldMap()
+{
+	const UArenaSession* Session = UArenaSession::Get(this);
+	const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+	if (!Session || !GameMode)
+	{
+		return;
+	}
+	const TArray<FStageDef>& Route = GameMode->GetRoute();
+	const float Time = GetWorld()->GetRealTimeSeconds();
+
+	if (BackdropTexture)
+	{
+		const float Tile = BackdropTexture->GetSizeX() * UiScale;
+		DrawTexture(BackdropTexture, 0.f, 0.f, Canvas->ClipX, Canvas->ClipY, 0.f, 0.f, Canvas->ClipX / Tile, Canvas->ClipY / Tile, FLinearColor::White, BLEND_Opaque);
+	}
+
+	// The map fills the height, leaving room for the info panel on the right.
+	const float MapH = Canvas->ClipY - 40.f;
+	const float MapW = MapH * MapAspect;
+	const float MapX = (Canvas->ClipX - MapW) * 0.5f - 170.f;
+	const float MapY = 20.f;
+	if (UTexture2D* Map = StoryTexture(TEXT("World_Map")))
+	{
+		DrawTexture(Map, MapX, MapY, MapW, MapH, 0.f, 0.f, 1.f, 1.f, FLinearColor::White, BLEND_Translucent);
+	}
+	auto NodeAt = [&](int32 Index) { return FVector2D(MapX + Route[Index].MapPosition.X * MapW, MapY + Route[Index].MapPosition.Y * MapH); };
+
+	// The road: a dotted line from stop to stop, faint where she hasn't been.
+	for (int32 Index = 1; Index < Route.Num(); ++Index)
+	{
+		const FVector2D From = NodeAt(Index - 1), To = NodeAt(Index);
+		const FLinearColor Dot = Index <= Session->HighestUnlocked ? FLinearColor(0.35f, 0.2f, 0.1f) : FLinearColor(0.35f, 0.2f, 0.1f, 0.25f);
+		for (int32 Step = 1; Step < 12; ++Step)
+		{
+			const FVector2D P = FMath::Lerp(From, To, Step / 12.f);
+			DrawRect(Dot, P.X - 3.f, P.Y - 3.f, 6.f, 6.f);
+		}
+	}
+
+	MenuButtons.Reset();
+	UTexture2D* Open = StoryTexture(TEXT("Map_Node"));
+	UTexture2D* Locked = StoryTexture(TEXT("Map_Node_Locked"));
+	constexpr float NodeSize = 44.f;
+	for (int32 Index = 0; Index < Route.Num(); ++Index)
+	{
+		const FVector2D P = NodeAt(Index);
+		const bool bOpen = Index <= Session->HighestUnlocked;
+		if (UTexture2D* Node = bOpen ? Open : Locked)
+		{
+			DrawTexture(Node, P.X - NodeSize * 0.5f, P.Y - NodeSize * 0.5f, NodeSize, NodeSize, 0.f, 0.f, 1.f, 1.f, FLinearColor::White, BLEND_Translucent);
+		}
+		if (bOpen)
+		{
+			DrawShadowed(Route[Index].Name.ToString(), P.X, P.Y + NodeSize * 0.5f + 2.f, FLinearColor::White, 1.f);
+			// Invisible buttons: clicking a stop selects it, clicking again travels.
+			MenuButtons.Add({ FString(), FBox2D(P - FVector2D(NodeSize), P + FVector2D(NodeSize)), [this, Index]()
+			{
+				if (MapSelection == Index)
+				{
+					TravelToMapNode(Index);
+				}
+				MapSelection = Index;
+			} });
+		}
+	}
+
+	// Fog hides everything she hasn't reached, and hangs along the map's borders.
+	if (UTexture2D* Fog = StoryTexture(TEXT("Map_Fog")))
+	{
+		auto Puff = [&](float X, float Y, float Size, float Phase)
+		{
+			const float Drift = FMath::Sin(Time * 0.5f + Phase) * 10.f;
+			DrawTexture(Fog, X - Size * 0.5f + Drift, Y - Size * 0.5f, Size, Size, 0.f, 0.f, 1.f, 1.f, FLinearColor(1.f, 1.f, 1.f, 0.96f), BLEND_Translucent);
+		};
+		for (int32 Index = Session->HighestUnlocked + 1; Index < Route.Num(); ++Index)
+		{
+			const FVector2D P = NodeAt(Index);
+			Puff(P.X - 70.f, P.Y, 230.f, Index);
+			Puff(P.X + 70.f, P.Y - 10.f, 230.f, Index + 2.f);
+			Puff(P.X, P.Y + 20.f, 260.f, Index + 4.f);
+		}
+		for (float Y = MapY; Y < MapY + MapH; Y += 110.f)
+		{
+			Puff(MapX + 8.f, Y + 40.f, 150.f, Y);
+			Puff(MapX + MapW - 8.f, Y + 70.f, 150.f, Y + 1.f);
+		}
+	}
+
+	// Nikki stands on the selected stop.
+	const AArenaPlayerPawn* Hero = Cast<AArenaPlayerPawn>(GetOwningPawn());
+	const UPaperSprite* Portrait = Hero ? Hero->GetPortrait() : nullptr;
+	if (UTexture2D* Marker = Portrait ? Portrait->GetBakedTexture() : nullptr)
+	{
+		const FVector2D P = NodeAt(FMath::Clamp(MapSelection, 0, Route.Num() - 1));
+		const float Bob = FMath::Abs(FMath::Sin(Time * 4.f)) * 10.f;
+		const float W = Marker->GetSizeX() * 4.f, H = Marker->GetSizeY() * 4.f;
+		DrawTexture(Marker, P.X - W * 0.5f, P.Y - H - Bob + 8.f, W, H, 0.f, 0.f, 1.f, 1.f, FLinearColor::White, BLEND_Translucent);
+	}
+
+	// Info panel for the selected stop.
+	if (Route.IsValidIndex(MapSelection))
+	{
+		const FStageDef& Stop = Route[MapSelection];
+		constexpr float PanelW = 360.f;
+		constexpr float PanelH = 300.f;
+		const float PanelX = MapX + MapW + 30.f;
+		const float PanelY = Canvas->ClipY * 0.5f - PanelH * 0.5f;
+		if (PanelTexture)
+		{
+			DrawNineSlice(PanelTexture, PanelCorner, PanelX, PanelY, PanelW, PanelH, FLinearColor::White);
+		}
+		const float Center = PanelX + PanelW * 0.5f;
+		DrawCentered(Stop.Name.ToString(), Center, PanelY + 30.f, Gold, 1.6f, GetMenuFont());
+		DrawCentered(MapSelection == 0 ? TEXT("Home village") : *FString::Printf(TEXT("%d waves"), Stop.Waves), Center, PanelY + 84.f, Parchment, 1.1f, GetMenuFont());
+		if (Stop.bPlaceholder)
+		{
+			DrawCentered(TEXT("(work in progress)"), Center, PanelY + 116.f, Parchment * 0.7f, 1.f, GetMenuFont());
+		}
+		DrawCentered(FString::Printf(TEXT("Gold  %s"), *FText::AsNumber(Session->Gold).ToString()), Center, PanelY + 164.f, WaveYellow, 1.3f, GetMenuFont());
+		DrawCentered(TEXT("W / S  choose"), Center, PanelY + 220.f, Parchment, 1.f, GetMenuFont());
+		DrawCentered(TEXT("Enter  travel"), Center, PanelY + 250.f, Parchment, 1.f, GetMenuFont());
+	}
+}
+
+void AArenaHUD::DrawStageClear()
+{
+	const UArenaSession* Session = UArenaSession::Get(this);
+	const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+	if (!Session || !GameMode)
+	{
+		return;
+	}
+	MenuButtons.Reset();
+	MenuButtons.Add({ TEXT("World map"), FBox2D(), [this]() { UArenaSession::Get(this)->Travel(this, EArenaScene::WorldMap); } });
+
+	constexpr float Width = 520.f;
+	constexpr float Height = 330.f;
+	const float X = (Canvas->ClipX - Width) * 0.5f;
+	const float Y = (Canvas->ClipY - Height) * 0.5f;
+	DrawPanel(X, Y, Width, Height, TEXT("STAGE CLEAR!"));
+	DrawCentered(FString::Printf(TEXT("Score %s  becomes gold"), *FText::AsNumber(GameMode->GetScore()).ToString()), Canvas->ClipX * 0.5f, Y + 110.f, Parchment, 1.2f, GetMenuFont());
+	DrawCentered(FString::Printf(TEXT("Gold  %s"), *FText::AsNumber(Session->Gold).ToString()), Canvas->ClipX * 0.5f, Y + 152.f, WaveYellow, 1.5f, GetMenuFont());
+	DrawCentered(TEXT("The road ahead is open."), Canvas->ClipX * 0.5f, Y + 204.f, Parchment, 1.f, GetMenuFont());
+	DrawMenuButtons((Canvas->ClipX - 300.f) * 0.5f, Y + Height - 84.f, 300.f);
+}
+
+// ---------------------------------------------------------------- shop
+
+void AArenaHUD::OpenShop()
+{
+	ShowScreen(EScreen::Shop);
+}
+
+void AArenaHUD::DrawShop()
+{
+	UArenaSession* Session = UArenaSession::Get(this);
+	AArenaPlayerPawn* Hero = Cast<AArenaPlayerPawn>(GetOwningPawn());
+	AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+	if (!Session || !Hero || !GameMode)
+	{
+		return;
+	}
+
+	MenuButtons.Reset();
+	for (const FShopItem& Item : ArenaShop::Items())
+	{
+		const int32 Owned = Session->Purchases.FindRef(Item.Id);
+		const FString Label = FString::Printf(TEXT("%s   -   %s   -   %s gold   (%d / %d)"),
+			*Item.Name, *Item.Description, *FText::AsNumber(Item.Cost).ToString(), Owned, Item.MaxCount);
+		MenuButtons.Add({ Label, FBox2D(), [this, Session, Hero, GameMode, &Item]()
+		{
+			if (!ArenaShop::TryBuy(*Session, Item))
+			{
+				return;
+			}
+			UArenaSession::PlaySfx(this, GameMode->GetStorySound(TEXT("Coin")));
+			Hero->RefreshStats();
+			// Some purchases are story moments: close the shop and let her speak.
+			if (!Item.BoughtSection.IsEmpty() && GameMode->GetScene())
+			{
+				ShowScreen(EScreen::Playing);
+				GameMode->GetScene()->Say(Item.BoughtSection);
+			}
+		}, nullptr, !ArenaShop::CanBuy(*Session, Item) });
+	}
+	MenuButtons.Add({ TEXT("Leave  (Esc)"), FBox2D(), [this]() { ShowScreen(EScreen::Playing); } });
+
+	const float Width = FMath::Min(1000.f, Canvas->ClipX - 40.f);
+	const float Height = 190.f + MenuButtons.Num() * 70.f;
+	const float X = (Canvas->ClipX - Width) * 0.5f;
+	const float Y = (Canvas->ClipY - Height) * 0.5f;
+	DrawPanel(X, Y, Width, Height, TEXT("SHOP"));
+
+	const FArenaStats& Stats = Hero->GetStats();
+	DrawCentered(FString::Printf(TEXT("Gold  %s"), *FText::AsNumber(Session->Gold).ToString()), Canvas->ClipX * 0.5f, Y + 96.f, WaveYellow, 1.4f, GetMenuFont());
+	DrawCentered(FString::Printf(TEXT("HP %.0f    AD %.0f    AP %.0f    Armor %.0f    MR %.0f    MS %.0f"),
+		Stats.MaxHealth, Stats.AttackDamage, Stats.AbilityPower, Stats.Armor, Stats.MagicResist, Stats.MoveSpeed),
+		Canvas->ClipX * 0.5f, Y + 136.f, Parchment, 1.f, GetMenuFont());
+	DrawMenuButtons(X + 40.f, Y + 176.f, Width - 80.f);
+}
+
+// ---------------------------------------------------------------- debug
+
+void AArenaHUD::TickDebug()
+{
+	UArenaSession* Session = UArenaSession::Get(this);
+	AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+	if (!Session || !GameMode)
+	{
+		return;
+	}
+	if (PlayerOwner->WasInputKeyJustPressed(EKeys::F1))
+	{
+		Session->bDebug = !Session->bDebug;
+	}
+	if (!Session->bDebug)
+	{
+		return;
+	}
+
+	AArenaPlayerPawn* Hero = Cast<AArenaPlayerPawn>(GetOwningPawn());
+	if (Hero && PlayerOwner->WasInputKeyJustPressed(EKeys::F2))
+	{
+		Hero->AddMana(1);
+	}
+	if (PlayerOwner->WasInputKeyJustPressed(EKeys::F3))
+	{
+		Session->Gold += 5000;
+	}
+	if (PlayerOwner->WasInputKeyJustPressed(EKeys::F4))
+	{
+		GameMode->KillAllEnemies();
+	}
+	if (PlayerOwner->WasInputKeyJustPressed(EKeys::F5))
+	{
+		// Everything open: all stages, the guitar, the contract.
+		Session->HighestUnlocked = GameMode->GetRoute().Num() - 1;
+		Session->Purchases.FindOrAdd(ArenaShop::Guitar) = 1;
+		Session->bContractSigned = Session->bIntroSeen = Session->bDressed = true;
+		if (Hero)
+		{
+			Hero->RefreshStats();
+		}
+	}
+	if (PlayerOwner->WasInputKeyJustPressed(EKeys::F6))
+	{
+		Session->Travel(this, EArenaScene::WorldMap);
+	}
 }
 
 void AArenaHUD::DrawCentered(const FString& Text, float CenterX, float Y, const FLinearColor& Color, float Scale, UFont* Font)

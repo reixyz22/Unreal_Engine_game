@@ -3,6 +3,8 @@
 #include "ArenaArt.h"
 #include "ArenaEnemy.h"
 #include "ArenaHUD.h"
+#include "HutScene.h"
+#include "TownScene.h"
 #include "ArenaPlayerPawn.h"
 #include "ArenaSession.h"
 #include "ArenaTheme.h"
@@ -35,48 +37,72 @@ void AArenaGameMode::InitGame(const FString& MapName, const FString& Options, FS
 {
 	Super::InitGame(MapName, Options, ErrorMessage);
 
-	// The first run of a launch is always the first theme (the plain dungeon);
-	// after that, any theme except the one just played.
-	UArenaSession* Session = UArenaSession::Get(this);
-	TArray<TSubclassOf<UArenaTheme>> Choices = Themes;
-	if (Session && !Session->LastTheme && !Choices.IsEmpty())
-	{
-		Choices = { Choices[0] };
-	}
-	else if (Session && Choices.Num() > 1)
-	{
-		Choices.Remove(Session->LastTheme.Get());
-	}
-	const TSubclassOf<UArenaTheme> Picked = Choices.IsEmpty() ? nullptr : Choices[FMath::RandRange(0, Choices.Num() - 1)];
-	Theme = Picked ? Picked->GetDefaultObject<UArenaTheme>() : GetDefault<UArenaTheme>();
-	if (Session)
-	{
-		Session->LastTheme = Picked;
-	}
+	// The session says which scene this load is; a stage takes its theme from the route.
+	const UArenaSession* Session = UArenaSession::Get(this);
+	SceneKind = Session ? Session->Scene : EArenaScene::Stage;
+	const FStageDef* Stage = Session && IsCombatStage() && Route.IsValidIndex(Session->StageIndex) ? &Route[Session->StageIndex] : nullptr;
+	Theme = Stage && Stage->Theme ? Stage->Theme->GetDefaultObject<UArenaTheme>() : GetDefault<UArenaTheme>();
+}
+
+bool AArenaGameMode::IsCombatStage() const
+{
+	return SceneKind == EArenaScene::Stage;
+}
+
+int32 AArenaGameMode::GetStageWaves() const
+{
+	const UArenaSession* Session = UArenaSession::Get(this);
+	return Session && Route.IsValidIndex(Session->StageIndex) ? Route[Session->StageIndex].Waves : MAX_int32;
 }
 
 void AArenaGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (UArenaSession* Session = UArenaSession::Get(this))
+	UArenaSession* Session = UArenaSession::Get(this);
+	switch (SceneKind)
 	{
-		Session->PlayMusic(Theme->Music);
+	case EArenaScene::Hut:
+		Scene = GetWorld()->SpawnActor<AHutScene>();
+		break;
+	case EArenaScene::Town:
+		Scene = GetWorld()->SpawnActor<ATownScene>();
+		break;
+	case EArenaScene::WorldMap:
+		break;
+	case EArenaScene::Stage:
+		SetFloor(Theme->FloorSprite, Theme->FloorTint);
+		GetWorldTimerManager().SetTimer(CheckTimer, this, &AArenaGameMode::CheckWave, CheckInterval, true, 1.f);
+		break;
 	}
-	// The arena floor is the level's sprite actor.
+	if (Session)
+	{
+		Session->PlayMusic(IsCombatStage() ? Theme->Music.Get() : SceneKind == EArenaScene::WorldMap ? MapMusic.Get() : TownMusic.Get());
+	}
+}
+
+void AArenaGameMode::SetFloor(UPaperSprite* Sprite, const FLinearColor& Tint)
+{
+	// The floor is the level's sprite actor.
 	for (TActorIterator<APaperSpriteActor> It(GetWorld()); It; ++It)
 	{
 		UPaperSpriteComponent* Floor = It->GetRenderComponent();
-		if (Theme->FloorSprite)
+		if (Sprite)
 		{
 			// Level sprites are static; the floor has to be movable to change art at runtime.
 			Floor->SetMobility(EComponentMobility::Movable);
-			Floor->SetSprite(Theme->FloorSprite);
+			Floor->SetSprite(Sprite);
 		}
-		Floor->SetSpriteColor(Theme->FloorTint);
+		Floor->SetSpriteColor(Tint);
 	}
+}
 
-	GetWorldTimerManager().SetTimer(CheckTimer, this, &AArenaGameMode::CheckWave, CheckInterval, true, 1.f);
+void AArenaGameMode::KillAllEnemies()
+{
+	for (TActorIterator<AArenaEnemy> It(GetWorld()); It; ++It)
+	{
+		It->ReceiveDamage(100000.f, EDamageType::Physical);
+	}
 }
 
 UClass* AArenaGameMode::GetDefaultPawnClassForController_Implementation(AController* InController)
@@ -118,13 +144,24 @@ UPaperSprite* AArenaGameMode::GetEnemyIcon(TSubclassOf<AArenaEnemy> Type) const
 
 void AArenaGameMode::CheckWave()
 {
-	if (bPlayerDead || bWaveQueued || CountEnemies() > 0)
+	if (bPlayerDead || bStageCleared || bWaveQueued || CountEnemies() > 0)
 	{
 		return;
 	}
 	if (Round > 0)
 	{
 		AwardWaveBonus();
+	}
+	if (Round >= GetStageWaves())
+	{
+		// Stage cleared: bank the score as gold and open the next stop on the map.
+		bStageCleared = true;
+		BankGold();
+		if (UArenaSession* Session = UArenaSession::Get(this))
+		{
+			Session->HighestUnlocked = FMath::Max(Session->HighestUnlocked, Session->StageIndex + 1);
+		}
+		return;
 	}
 
 	PlanWave();
@@ -224,6 +261,18 @@ void AArenaGameMode::OnPlayerDied()
 {
 	// The HUD shows the death screen; Continue there calls RestartArena.
 	bPlayerDead = true;
+	BankGold();
+}
+
+void AArenaGameMode::BankGold()
+{
+	// Score becomes gold when a run ends, win or lose.
+	UArenaSession* Session = UArenaSession::Get(this);
+	if (Session && !bGoldBanked)
+	{
+		bGoldBanked = true;
+		Session->Gold += Score;
+	}
 }
 
 void AArenaGameMode::OnEnemyKilled(const AArenaEnemy& Enemy, const UObject* Source)

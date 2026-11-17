@@ -46,7 +46,7 @@ void APyroEnemy::Tick(float DeltaTime)
 	}
 	Desired += ComputeSeparation() * SpreadStrength;
 
-	MoveWithinArena(Desired.GetClampedToMaxSize(1.0) * MoveSpeed * DeltaTime);
+	MoveWithinArena(Desired.GetClampedToMaxSize(1.0) * Stats.MoveSpeed * DeltaTime);
 	FaceToward(TowardPlayer.X);
 }
 
@@ -88,6 +88,6 @@ void APyroEnemy::Fire()
 	if (AArenaProjectile* Bead = GetWorld()->SpawnActor<AArenaProjectile>(SpawnAt, FRotator::ZeroRotator))
 	{
 		const FLinearColor BeadTint = Skin ? Skin->ProjectileTint : FLinearColor::White;
-		Bead->Launch(BeadSprite, BeadTint, Direction.GetSafeNormal() * BeadSpeed, BeadDamage);
+		Bead->Launch(BeadSprite, BeadTint, Direction.GetSafeNormal() * BeadSpeed, Stats.AttackDamage);
 	}
 }

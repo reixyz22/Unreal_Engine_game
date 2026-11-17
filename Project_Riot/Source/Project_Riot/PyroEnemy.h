@@ -40,8 +40,6 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Pyro")
 	float BeadSpeed = 320.f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Pyro")
-	float BeadDamage = 10.f;
 
 	FTimerHandle FireTimer;
 };

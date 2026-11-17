@@ -31,11 +31,15 @@ AArenaEnemy::AArenaEnemy()
 	Body->SetRelativeScale3D(FVector(ArenaArt::PixelScale));
 
 	Health = CreateDefaultSubobject<UHealthComponent>(TEXT("Health"));
+
+	Stats.MaxHealth = 30.f;
+	Stats.AttackDamage = 10.f;
+	Stats.MoveSpeed = 140.f;
 }
 
 void AArenaEnemy::BeginPlay()
 {
-	Health->SetMaxHealth(MaxHealth);
+	Health->SetMaxHealth(Stats.MaxHealth);
 	Super::BeginPlay();
 
 	FVector Start = GetActorLocation();
@@ -68,10 +72,10 @@ void AArenaEnemy::Tick(float DeltaTime)
 	Body->SetSpriteColor(Health->IsInvulnerable() ? HitFlash : Tint);
 }
 
-bool AArenaEnemy::ReceiveDamage(float Amount, const UObject* Source)
+bool AArenaEnemy::ReceiveDamage(float Amount, EDamageType Type, const UObject* Source)
 {
 	LastHitBy = Source;
-	return Health->ApplyDamage(Amount);
+	return Health->ApplyDamage(Stats.Mitigate(Amount, Type));
 }
 
 float AArenaEnemy::GetRadius() const

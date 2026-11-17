@@ -110,6 +110,91 @@ def convert_music():
                         "-af", "loudnorm=I=-18:TP=-2", "-ac", "1", "-ar", "32000", str(MUSIC / f"{name}.wav")], check=True)
 
 
+
+# ---------------------------------------------------------------- story sounds
+
+def tone(freq, length, shape="square", decay=6.0, vibrato=0.0):
+    out = []
+    for i in seconds(length):
+        t = i / RATE
+        phase = freq * t + vibrato * math.sin(2 * math.pi * 5 * t)
+        frac = phase % 1.0
+        wave_value = (1.0 if frac < 0.5 else -1.0) if shape == "square" else 4 * abs(frac - 0.5) - 1
+        out.append(wave_value * math.exp(-t * decay))
+    return out
+
+
+def story_sfx():
+    """Short UI and story sounds: phone buzz, text blip, bed smash, poof, stamp, coin, fanfare."""
+    buzz = []
+    for burst in range(2):
+        buzz += [math.sin(2 * math.pi * 150 * i / RATE) * (1 if (i // 220) % 2 else 0.4) for i in seconds(0.22)]
+        buzz += [0.0] * int(0.12 * RATE)
+    write("SFX_PhoneBuzz", buzz + tone(1320, 0.12) + tone(1760, 0.2), 0.5)
+    write("SFX_Blip", tone(880, 0.04, decay=30), 0.25)
+    write("SFX_Select", tone(660, 0.06, decay=20) + tone(990, 0.08, decay=20), 0.35)
+
+    smash = []
+    for i in seconds(0.5):
+        t = i / RATE
+        smash.append(math.sin(2 * math.pi * (90 - 60 * t) * t) * math.exp(-t * 9) + rng.uniform(-1, 1) * math.exp(-t * 14))
+    write("SFX_Smash", lowpass(smash, 0.4), 0.9)
+
+    poof = lowpass([rng.uniform(-1, 1) * math.sin(math.pi * i / (0.3 * RATE)) for i in seconds(0.3)], 0.25)
+    write("SFX_Poof", poof + tone(1047, 0.1, "triangle") + tone(1568, 0.25, "triangle"), 0.5)
+    write("SFX_Stamp", lowpass([rng.uniform(-1, 1) * math.exp(-i / RATE * 40) for i in seconds(0.15)], 0.3), 0.9)
+    write("SFX_Coin", tone(988, 0.07, decay=10) + tone(1319, 0.3, decay=8), 0.4)
+    fanfare = []
+    for freq, length in ((523, 0.12), (659, 0.12), (784, 0.12), (1047, 0.5)):
+        fanfare += tone(freq, length, decay=3)
+    write("SFX_Fanfare", fanfare, 0.5)
+
+
+def note_freq(name):
+    """'C4', 'F#3', or '-' for a rest."""
+    if name == "-":
+        return 0.0
+    semitone = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}[name[0]] + (1 if "#" in name else 0)
+    return 440.0 * 2 ** ((semitone - 9) / 12 + int(name[-1]) - 4)
+
+
+def chiptune(name, bpm, melody, bass, volume=0.5):
+    """A two-voice loop: square-wave melody (eighth notes) over a triangle bass (half notes).
+    Placeholder music, written here so each town has its own tune until real tracks arrive."""
+    eighth = 60.0 / bpm / 2
+    total = int(len(melody) * eighth * RATE)
+    mix = [0.0] * total
+    for voice, step, shape, level, decay in ((melody, eighth, "square", 0.5, 5.0), (bass, eighth * 4, "triangle", 0.8, 1.2)):
+        for index, note in enumerate(voice):
+            freq = note_freq(note)
+            if not freq:
+                continue
+            start = int(index * step * RATE)
+            for offset, sample in enumerate(tone(freq, step * 0.95, shape, decay)):
+                if start + offset < total:
+                    mix[start + offset] += sample * level
+    MUSIC.mkdir(exist_ok=True)
+    peak = max(abs(v) for v in mix)
+    with wave.open(str(MUSIC / f"{name}.wav"), "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(RATE)
+        out.writeframes(b"".join(struct.pack("<h", int(v / peak * volume * 32767)) for v in mix))
+
+
+def placeholder_music():
+    town = ("E4 G4 C5 G4 E4 G4 C5 E5 D5 B4 G4 B4 D5 - B4 - "
+            "C5 A4 F4 A4 C5 A4 F5 E5 D5 C5 B4 D5 C5 - - - "
+            "E4 G4 C5 G4 E5 D5 C5 E5 F5 E5 D5 B4 G4 - B4 - "
+            "A4 C5 F5 A4 G4 B4 D5 G4 C5 E5 G5 E5 C5 - - -").split()
+    chiptune("BGM_Town", 104, town, "C3 C3 G2 G2 F2 F2 G2 C3 C3 C3 G2 G2 F2 G2 C3 C3".split(), 0.45)
+    world = ("A4 - C5 E5 A5 - E5 C5 G4 - B4 D5 G5 - D5 B4 "
+             "F4 - A4 C5 F5 - C5 A4 E4 - G#4 B4 E5 - - - "
+             "A4 - C5 E5 A5 - E5 C5 G4 - B4 D5 G5 - D5 B4 "
+             "F4 A4 C5 F5 E5 D5 C5 B4 A4 - - - A4 - - -").split()
+    chiptune("BGM_Map", 120, world, "A2 A2 G2 G2 F2 F2 E2 E2 A2 A2 G2 G2 F2 F2 A2 A2".split(), 0.45)
+
+
 def main():
     convert_music()
     chain_throw()
@@ -117,6 +202,8 @@ def main():
     beam_charge()
     beam_fire()
     guitar_strum()
+    story_sfx()
+    placeholder_music()
 
 
 if __name__ == "__main__":

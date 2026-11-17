@@ -23,6 +23,9 @@ Hand-painted by me (`Nikki/guitar_painted.png`). `build_art.py` keys out the pap
 ## Space theme spacemen
 Drawn by me in MS Paint (`Space/spaceman_painted.png`). `build_art.py` keys out the background and animates the run.
 
+## Story placeholders
+The hut, village, phone, world map and pyjama recolors are drawn or recolored by `build_story_art.py` as stand-ins. Carl, Sarah and the merchant are recolored or reused 0x72 characters. The town and world-map tunes are placeholder chiptunes written in `build_sounds.py`.
+
 ## Sound effects
 Synthesized from scratch by `build_sounds.py` (no samples): the chain whoosh and hit, the Cleric beam charge and zap, and a plucked-string guitar strum.
 

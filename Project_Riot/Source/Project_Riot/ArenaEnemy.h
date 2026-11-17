@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ArenaStats.h"
 #include "GameFramework/Actor.h"
 #include "ArenaEnemy.generated.h"
 
@@ -24,7 +25,7 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	// Source is the spell that hit (a chain throw, a Q burst), for combo scoring.
-	bool ReceiveDamage(float Amount, const UObject* Source = nullptr);
+	bool ReceiveDamage(float Amount, EDamageType Type, const UObject* Source = nullptr);
 	float GetRadius() const;
 	void SetHovered(bool bHovered);
 	UPaperSprite* GetIcon() const;
@@ -56,11 +57,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy")
 	FLinearColor Tint = FLinearColor::White;
 
+	// Health, damage, resistances and speed. Each enemy type sets its own in its constructor.
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy")
-	float MaxHealth = 30.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Enemy")
-	float MoveSpeed = 140.f;
+	FArenaStats Stats;
 
 private:
 	UPROPERTY()

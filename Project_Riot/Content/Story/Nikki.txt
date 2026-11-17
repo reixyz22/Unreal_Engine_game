@@ -1,0 +1,67 @@
+# Nikki's story script.
+#
+# William: everything here is PLACEHOLDER writing for you to replace. Edit this file and
+# press Play; no compiling. Rules:
+#   [name]            starts a section. The game asks for sections by name.
+#   Speaker: text     one dialog box. Add as many lines to a section as you like.
+#   # ...             a comment.
+# A speaker called Nikki, Sarah, Carl or Merchant gets a portrait. Any other speaker
+# (a sign, a notice) shows as a plain name tag.
+
+# ---------------------------------------------------------------- the hut
+
+[phone_text]
+Carl: hey want to hang out? you were so cool. I think you're so beautiful and unique...
+
+[phone_react]
+Nikki: Ugh. Not this guy again.
+
+[bed_smashed]
+Nikki: ...Okay. I feel a little better.
+
+[dressed]
+Nikki: Lightning pyjamas off. Work clothes on.
+
+# ---------------------------------------------------------------- the village
+
+[home_door]
+Nikki: Home. Such as it is.
+
+[sign_village]
+Sign: ROCK COUNTY. (William: village welcome sign text goes here.)
+
+[sign_eviction]
+Notice: EVICTION NOTICE. Rock County. The door is taped shut.
+
+[sign_rent]
+Notice: NOTICE OF RENT INCREASE.
+
+[sign_vote]
+Yard Sign: VOTE FOR STEVE 2037
+
+[house_nice]
+Nikki: (William: Nikki's line about the nice house goes here.)
+
+[house_plain]
+Nikki: (William: empty slot. Give this house a sign or a neighbor.)
+
+[well]
+Nikki: (William: empty slot. Something about the well.)
+
+[sarah_talk]
+Sarah: (William: Sarah's greeting goes here. She is the village elder.)
+
+[contract]
+Contract: EMPLOYMENT CONTRACT. Three stages. $2160 per stage, paid out when all stages are complete.
+Sarah: Sign at the bottom, dear.
+
+[contract_signed]
+Sarah: (William: Sarah's line after Nikki signs goes here.)
+Nikki: (William: Nikki's reply.)
+
+[gate_locked]
+Nikki: I can't leave without a job lined up. The elder is by the gate.
+
+[bought_guitar]
+Nikki: A guitar again. I had to sell my old one when I stopped performing.
+Nikki: (William: the rest of this moment is yours.)

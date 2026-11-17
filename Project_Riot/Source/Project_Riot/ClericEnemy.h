@@ -57,9 +57,6 @@ private:
 	float BeamWidth = 44.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Cleric")
-	float BeamDamage = 15.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Cleric")
 	float StunSeconds = 0.9f;
 
 	FTimerHandle CastTimer;

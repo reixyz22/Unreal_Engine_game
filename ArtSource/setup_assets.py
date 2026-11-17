@@ -4,7 +4,14 @@ Runs inside Unreal (editor closed):
   UnrealEditor-Cmd.exe Project_Riot.uproject -run=pythonscript -script=<this file>
 Safe to re-run; every asset is rebuilt in place.
 """
+import os
+import sys
+
 import unreal
+
+SOURCE = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir() + "../ArtSource/")
+sys.path.insert(0, SOURCE)
+from stage_table import NIKKI_ROUTE  # noqa: E402
 
 ART = "/Game/Art"
 CORE = "/Game/Core"
@@ -13,17 +20,21 @@ EAL = unreal.EditorAssetLibrary
 TOOLS = unreal.AssetToolsHelpers.get_asset_tools()
 
 # Theme tracks, imported separately; until they exist every theme plays the chiptune loop.
-THEME_MUSIC = {"Dungeon": "/Game/Audio/BGM_Dungeon", "Space": "/Game/Audio/BGM_Space"}
+THEME_MUSIC = {"Dungeon": "/Game/Audio/BGM_Dungeon", "Space": "/Game/Audio/BGM_Space",
+               "Town": "/Game/Audio/BGM_Town", "Map": "/Game/Audio/BGM_Map"}
+STORY_ART = "/Game/Art/Story"
+STORY_SOUNDS = ["PhoneBuzz", "Blip", "Select", "Smash", "Poof", "Stamp", "Coin", "Fanfare"]
 
 # Not characters: no glow, no outline.
 PLAIN_SPRITES = {"T_ArenaFloor_Sprite", "T_Player_Sprite", "T_Floor_NikkiWorld_Sprite", "T_Floor_Space_Sprite",
+                 "T_Floor_Hut_Sprite", "T_Floor_Town_Sprite",
                  "UI_Panel_Sprite", "UI_Button_Sprite", "UI_Backdrop_Sprite", "UI_Skull_Sprite"}
 BRIGHT_SPRITES = {"Pyro_Bead_Sprite", "Flail_Ball_Sprite", "Cleric_Beam_Sprite", "Shock_Burst_Sprite",
                   "Shard_Mana_Sprite", "Shard_Health_Sprite"}
 # Frames from build_art.py that get a texture and a sprite here.
 FRAMES = ["Nikki_Guitar", "Cleric_Beam", "Chain_Link", "Shock_Burst", "Shard_Mana", "Shard_Health"] + [f"Cleric_Run_{i}" for i in range(4)] \
     + [f"Spaceman_Run_{i}" for i in range(4)] \
-    + ["T_Floor_NikkiWorld", "T_Floor_Space", "UI_Panel", "UI_Button", "UI_Backdrop", "UI_Skull"]
+    + ["T_Floor_NikkiWorld", "T_Floor_Space", "UI_Panel", "UI_Button", "UI_Backdrop", "UI_Skull", "T_Floor_Hut", "T_Floor_Town"]
 
 SPRITE_HLSL = """
 float W, H;
@@ -215,8 +226,8 @@ def build_fog_material():
     return material
 
 
-def apply_sprite_materials(sprite_material, bright):
-    for path in EAL.list_assets(ART, recursive=False):
+def apply_sprite_materials(sprite_material, bright, folder=ART):
+    for path in EAL.list_assets(folder, recursive=False):
         asset = unreal.load_asset(path)
         name = asset.get_name()
         if isinstance(asset, unreal.PaperSprite) and name not in PLAIN_SPRITES:
@@ -249,29 +260,35 @@ def fit_floor_sprite():
     EAL.save_loaded_asset(sprite, False)
 
 
-def import_frames():
-    folder = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir() + "../ArtSource/Import/")
+def story_frames():
+    """Every PNG in Import/Story: drop a new file in and it gets imported under its name."""
+    return sorted(name[:-4] for name in os.listdir(SOURCE + "Import/Story") if name.endswith(".png"))
+
+
+def import_frames(names=None, subfolder="", destination=ART):
+    names = FRAMES if names is None else names
+    folder = SOURCE + "Import/" + subfolder
     tasks = []
-    for name in FRAMES:
+    for name in names:
         task = unreal.AssetImportTask()
         task.filename = folder + name + ".png"
-        task.destination_path = ART
+        task.destination_path = destination
         task.replace_existing = True
         task.automated = True
         task.save = False
         tasks.append(task)
     TOOLS.import_asset_tasks(tasks)
 
-    for name in FRAMES:
-        texture = unreal.load_asset(f"{ART}/{name}")
+    for name in names:
+        texture = unreal.load_asset(f"{destination}/{name}")
         texture.set_editor_property("filter", unreal.TextureFilter.TF_NEAREST)
         texture.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_EDITOR_ICON)
         texture.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
         texture.set_editor_property("lod_group", unreal.TextureGroup.TEXTUREGROUP_PIXELS2D)
         EAL.save_loaded_asset(texture, False)
 
-        sprite_path = f"{ART}/{name}_Sprite"
-        sprite = unreal.load_asset(sprite_path) if EAL.does_asset_exist(sprite_path) else             TOOLS.create_asset(f"{name}_Sprite", ART, unreal.PaperSprite, unreal.PaperSpriteFactory())
+        sprite_path = f"{destination}/{name}_Sprite"
+        sprite = unreal.load_asset(sprite_path) if EAL.does_asset_exist(sprite_path) else             TOOLS.create_asset(f"{name}_Sprite", destination, unreal.PaperSprite, unreal.PaperSpriteFactory())
         sprite.set_editor_property("source_texture", texture)
         sprite.set_editor_property("source_uv", unreal.Vector2D(0, 0))
         sprite.set_editor_property("source_dimension", unreal.Vector2D(texture.blueprint_get_size_x(), texture.blueprint_get_size_y()))
@@ -285,7 +302,7 @@ def import_frames():
 def import_sounds():
     """Import the WAVs from build_sounds.py into /Game/Audio and return them by name."""
     folder = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir() + "../ArtSource/Sounds/")
-    names = ["SFX_ChainThrow", "SFX_ChainHit", "SFX_BeamCharge", "SFX_BeamFire", "SFX_Strum"]
+    names = ["SFX_ChainThrow", "SFX_ChainHit", "SFX_BeamCharge", "SFX_BeamFire", "SFX_Strum"] + [f"SFX_{n}" for n in STORY_SOUNDS]
     tasks = []
     for name in names:
         task = unreal.AssetImportTask()
@@ -320,12 +337,19 @@ def import_music():
 
 
 def flipbook(name, sprite_names, fps):
-    path = f"{ART}/{name}"
-    book = unreal.load_asset(path) if EAL.does_asset_exist(path) else         TOOLS.create_asset(name, ART, unreal.PaperFlipbook, unreal.PaperFlipbookFactory())
+    return flipbook_in(ART, name, sprite_names, fps)
+
+
+def flipbook_in(folder, name, sprite_names, fps):
+    path = f"{folder}/{name}"
+    if EAL.does_asset_exist(path):
+        book = unreal.load_asset(path)
+    else:
+        book = TOOLS.create_asset(name, folder, unreal.PaperFlipbook, unreal.PaperFlipbookFactory())
     frames = []
     for sprite_name in sprite_names:
         frame = unreal.PaperFlipbookKeyFrame()
-        frame.set_editor_property("sprite", unreal.load_asset(f"{ART}/{sprite_name}"))
+        frame.set_editor_property("sprite", unreal.load_asset(f"{folder}/{sprite_name}"))
         frame.set_editor_property("frame_run", 1)
         frames.append(frame)
     book.set_editor_property("frames_per_second", fps)
@@ -382,7 +406,45 @@ def build_themes(pyro, cleric, music, spaceman):
                  menu_tint=colour(1.0, 0.8, 0.92),
                  enemy_skins=[skin(pyro, colour(0.01, 0.01, 0.02), colour(1.0, 0.2, 0.6), 0.85, projectile=colour(0.03, 0.03, 0.04)),
                               skin(cleric, colour(0.01, 0.01, 0.02), colour(1.0, 0.2, 0.6), 0.85)])
-    return [dungeon, space, nikki]
+    # Placeholder stages: the dungeon floor under a different light, until they get their own art.
+    desert = blueprint("BP_Theme_Desert", unreal.ArenaTheme)
+    set_defaults(desert, display_name=unreal.Text("The Desert"), music=music["NikkiWorld"],
+                 floor_tint=colour(1.0, 0.86, 0.55), fog_color=colour(0.95, 0.8, 0.45), fog_density=0.3,
+                 enemy_skins=[skin(pyro, colour(0.25, 0.1, 0.02), colour(1.0, 0.85, 0.5), 0.6)])
+    far_desert = blueprint("BP_Theme_FarDesert", unreal.ArenaTheme)
+    set_defaults(far_desert, display_name=unreal.Text("The Far Desert"), music=music["NikkiWorld"],
+                 floor_tint=colour(1.0, 0.62, 0.42), fog_color=colour(0.9, 0.4, 0.2), fog_density=0.4,
+                 enemy_skins=[skin(pyro, colour(0.2, 0.02, 0.02), colour(1.0, 0.6, 0.3), 0.7)])
+    elf_world = blueprint("BP_Theme_ElfWorld", unreal.ArenaTheme)
+    set_defaults(elf_world, display_name=unreal.Text("Blue Elf World"), music=music["Space"],
+                 floor_tint=colour(0.45, 0.65, 1.0), fog_color=colour(0.5, 0.75, 1.0), fog_density=0.45,
+                 menu_tint=colour(0.75, 0.85, 1.0),
+                 enemy_skins=[skin(pyro, colour(0.02, 0.05, 0.3), colour(0.6, 0.9, 1.0), 0.8),
+                              skin(cleric, colour(0.02, 0.05, 0.3), colour(0.6, 0.9, 1.0), 0.8)])
+    return {bp.get_name(): bp for bp in (dungeon, space, nikki, desert, far_desert, elf_world)}
+
+
+def build_route(themes):
+    """Nikki's world-map route, from stage_table.py."""
+    route = []
+    for name, theme, (u, v), placeholder in NIKKI_ROUTE:
+        stop = unreal.StageDef()
+        stop.set_editor_property("name", unreal.Text(name))
+        if theme:
+            stop.set_editor_property("theme", themes[theme].generated_class())
+        stop.set_editor_property("map_position", unreal.Vector2D(u, v))
+        stop.set_editor_property("placeholder", placeholder)
+        route.append(stop)
+    return route
+
+
+def copy_speed(name, sprite_prefix, count, like):
+    """A flipbook that plays at the same speed as an existing one."""
+    fps = unreal.load_asset(f"{ART}/{like}").get_editor_property("frames_per_second")
+    book = flipbook_in(STORY_ART, name, [f"{sprite_prefix}_{i}_Sprite" for i in range(count)], fps)
+    book.set_editor_property("default_material", unreal.load_asset(f"{ART}/M_ArenaSprite"))
+    EAL.save_loaded_asset(book, False)
+    return book
 
 
 def blueprint(name, parent_class):
@@ -406,12 +468,15 @@ def main():
     reimport_floor()
     fit_floor_sprite()
     import_frames()
+    story_names = story_frames()
+    import_frames(story_names, "Story/", STORY_ART)
     sounds = import_sounds()
     cleric_run = flipbook("FB_ClericRun", [f"Cleric_Run_{i}_Sprite" for i in range(4)], 8.0)
     sprite_material = build_sprite_material()
     bright = build_bright_instance(sprite_material)
     fog = build_fog_material()
     apply_sprite_materials(sprite_material, bright)
+    apply_sprite_materials(sprite_material, bright, STORY_ART)
 
     pyro = blueprint("BP_PyroEnemy", unreal.PyroEnemy)
     set_defaults(pyro, body_anim=unreal.load_asset(f"{ART}/FB_PyroRun"),
@@ -430,25 +495,35 @@ def main():
                  icon_material=build_icon_material())
     import_music()
     chiptune = unreal.load_asset("/Game/Audio/chiptune-police_loop")
-    theme_music = {"Dungeon": chiptune, "Space": chiptune, "NikkiWorld": chiptune}
+    theme_music = {"Dungeon": chiptune, "Space": chiptune, "NikkiWorld": chiptune, "Town": chiptune, "Map": chiptune}
     for name, path in THEME_MUSIC.items():
         if EAL.does_asset_exist(path):
             theme_music[name] = unreal.load_asset(path)
     spaceman = flipbook("FB_SpacemanRun", [f"Spaceman_Run_{i}_Sprite" for i in range(4)], 8.0)
     themes = build_themes(pyro, cleric, theme_music, spaceman)
+
+    # Story art and sounds are handed to the game by name (see AArenaGameMode::GetStoryArt).
+    story_art = {name: unreal.load_asset(f"{STORY_ART}/{name}_Sprite") for name in story_names}
+    story_art["Floor_Hut"] = unreal.load_asset(f"{ART}/T_Floor_Hut_Sprite")
+    story_art["Floor_Town"] = unreal.load_asset(f"{ART}/T_Floor_Town_Sprite")
+    story_sounds = {name: sounds[f"SFX_{name}"] for name in STORY_SOUNDS}
     nikki_bp = unreal.load_asset(f"{CORE}/BP_ArenaPlayerPawn")
     # Pyros fill every wave; Clerics join from wave 3 at a fifth of the wave.
     set_defaults(unreal.load_asset(f"{CORE}/BP_ArenaGameMode"),
                  spawn_rules=[spawn_rule(pyro, 1, 4.0), spawn_rule(cleric, 3, 1.0)],
                  hud_class=hud.generated_class(),
                  heroes=[nikki_bp.generated_class()],
-                 themes=[theme.generated_class() for theme in themes])
+                 route=build_route(themes), story_art=story_art, story_sounds=story_sounds,
+                 town_music=theme_music["Town"], map_music=theme_music["Map"])
     set_defaults(unreal.load_asset(f"{CORE}/BP_ArenaPlayerPawn"), fog_material=fog,
                  guitar_sprite=unreal.load_asset(f"{ART}/Nikki_Guitar_Sprite"),
                  shock_burst_sprite=unreal.load_asset(f"{ART}/Shock_Burst_Sprite"),
                  throw_sound=sounds["SFX_ChainThrow"], chain_hit_sound=sounds["SFX_ChainHit"],
                  strum_sound=sounds["SFX_Strum"],
-                 chain_link_sprite=unreal.load_asset(f"{ART}/Chain_Link_Sprite"))
+                 chain_link_sprite=unreal.load_asset(f"{ART}/Chain_Link_Sprite"),
+                 pyjama_idle=copy_speed("FB_NikkiPJIdle", "Nikki_PJ_Idle", 6, "FB_NikkiIdle"),
+                 pyjama_run=copy_speed("FB_NikkiPJRun", "Nikki_PJ_Run", 4, "FB_NikkiRun"),
+                 pyjama_strike=copy_speed("FB_NikkiPJStrike", "Nikki_PJ_Strike", 6, "FB_NikkiStrike"))
     unreal.log("setup_assets: done")
 
 

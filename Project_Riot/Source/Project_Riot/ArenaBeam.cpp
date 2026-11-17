@@ -65,7 +65,7 @@ void AArenaBeam::Tick(float DeltaTime)
 	AArenaPlayerPawn* Player = Cast<AArenaPlayerPawn>(UGameplayStatics::GetPlayerPawn(this, 0));
 	if (bActive && !bHitPlayer && Player && IsTouchingPlayer(Player->GetRadius(), Player->GetActorLocation()))
 	{
-		bHitPlayer = Player->ReceiveStunHit(Settings.Damage, Settings.StunSeconds);
+		bHitPlayer = Player->ReceiveStunHit(Settings.Damage, EDamageType::Magic, Settings.StunSeconds);
 	}
 }
 

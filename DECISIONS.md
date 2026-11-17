@@ -13,6 +13,9 @@ The calls I made on this project, newest at the bottom. Each entry gives what I 
 7. [007 · UI drawn from C++ on the HUD canvas instead of UMG widgets](#007-ui-drawn-from-c-on-the-hud-canvas)
 8. [008 · Glow and fog through one sprite material and one post-process material](#008-glow-and-fog-through-two-materials)
 9. [009 · Themes as Blueprint subclasses, with enemy palette swaps done as a gradient map in the shader](#009-themes-as-blueprint-subclasses)
+10. [010 · Story scenes (hut, village, world map) share one level instead of a level each](#010-story-scenes-share-one-level)
+11. [011 · League-style stats: one stat block and one damage formula for heroes and enemies](#011-league-style-stats)
+12. [012 · Dialog lives in a text file, and story art is looked up by name](#012-dialog-in-a-text-file-art-by-name)
 
 ---
 
@@ -134,3 +137,43 @@ The calls I made on this project, newest at the bottom. Each entry gives what I 
 - Nikki and the HUD are never themed, for clarity. Only the menus take the theme's color.
 
 **Cost.** A gradient map can't recolor individual parts, like a robe versus a face. Hand-drawn frames are the upgrade path.
+
+---
+
+## 010: Story scenes share one level
+
+**2026-11-16**
+
+**Options.**
+- A level per scene (the usual way): each hut, town and stage is its own map, laid out in the editor.
+- One level, with a scene actor that builds the scene in code (picked).
+
+**Decision.** `UArenaSession` remembers which scene is next and reloads the level. The game mode then spawns `AHutScene` or `ATownScene`, shows the world map, or runs a combat stage. Scenes place props from small tables in C++.
+
+**Why.** No editor work per scene, so a new town is one class and one table. Progress lives in the session, which survives reloads.
+
+**Cost.** No visual level editing. If towns get big, real levels are the move.
+
+---
+
+## 011: League-style stats
+
+**2026-11-16**
+
+- Heroes and enemies share one stat block (`FArenaStats`): health, attack damage, ability power, armor, magic resist, move speed.
+- One damage rule: `damage x 100 / (100 + resistance)`. Physical damage checks armor, magic checks magic resist.
+- Autos scale with attack damage; Nikki's Q scales with ability power.
+- Score becomes gold when a run ends, and gold buys stat upgrades and specials at the village stall.
+
+**Cost.** Everything starts at 0 resistance, so today the numbers play exactly as before. The system is there to be tuned.
+
+---
+
+## 012: Dialog in a text file, art by name
+
+**2026-11-16**
+
+- All dialog is in `Content/Story/Nikki.txt` as `Speaker: line` under `[section]` headers. I write the story there without compiling.
+- Story art is handed to the game as a name-to-sprite table built by `setup_assets.py`. Replacing a placeholder is saving a PNG with the same name.
+
+**Cost.** A typo in a section name only shows up when that line plays. Missing sections say so on screen.

@@ -6,6 +6,8 @@
 
 class AArenaEnemy;
 class AArenaPlayerPawn;
+class AStoryScene;
+enum class EArenaScene : uint8;
 class UArenaTheme;
 class UPaperSprite;
 class USoundBase;
@@ -24,6 +26,30 @@ struct FEnemySpawnRule
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	float Weight = 1.f;
+};
+
+// One stop on the world map. Index 0 is the home village; the rest are combat stages.
+USTRUCT(BlueprintType)
+struct FStageDef
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FText Name;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TSubclassOf<UArenaTheme> Theme;
+
+	// Where it sits on the world map, 0..1 from the top-left.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FVector2D MapPosition = FVector2D(0.5, 0.5);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 Waves = 15;
+
+	// Still a stand-in: shown as work in progress on the map.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bPlaceholder = false;
 };
 
 // A "COOL!"-style callout over a kill, for the HUD to draw.
@@ -64,7 +90,22 @@ public:
 	const TArray<FScorePopup>& GetPopups() const { return Popups; }
 	const struct FEnemySkin* GetEnemySkin(TSubclassOf<AArenaEnemy> Type) const;
 
-	// The run's theme, picked at random before anything else begins play.
+	// Which scene this load is showing, and its story scene actor if it has one.
+	EArenaScene GetSceneKind() const { return SceneKind; }
+	bool IsCombatStage() const;
+	AStoryScene* GetScene() const { return Scene; }
+	const TArray<FStageDef>& GetRoute() const { return Route; }
+	int32 GetStageWaves() const;
+	bool IsStageCleared() const { return bStageCleared; }
+
+	// Story art and sounds are looked up by name, so placeholder art can be swapped
+	// by replacing the asset without touching code.
+	UPaperSprite* GetStoryArt(FName Name) const { return StoryArt.FindRef(Name); }
+	USoundBase* GetStorySound(FName Name) const { return StorySounds.FindRef(Name); }
+	void SetFloor(UPaperSprite* Sprite, const FLinearColor& Tint);
+	void KillAllEnemies();
+
+	// The stage's theme (the plain defaults outside combat).
 	const UArenaTheme& GetTheme() const { return *Theme; }
 	UPaperSprite* GetEnemyIcon(TSubclassOf<AArenaEnemy> Type) const;
 
@@ -90,13 +131,30 @@ private:
 	FVector PickSpawnPoint() const;
 	int32 CountEnemies() const;
 	void AwardWaveBonus();
+	void BankGold();
 
 	// Playable heroes, shown on the start screen.
 	UPROPERTY(EditDefaultsOnly, Category = "Heroes")
 	TArray<TSubclassOf<AArenaPlayerPawn>> Heroes;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Theme")
-	TArray<TSubclassOf<UArenaTheme>> Themes;
+	// Nikki's route across the world map.
+	UPROPERTY(EditDefaultsOnly, Category = "Story")
+	TArray<FStageDef> Route;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Story")
+	TMap<FName, TObjectPtr<UPaperSprite>> StoryArt;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Story")
+	TMap<FName, TObjectPtr<USoundBase>> StorySounds;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Story")
+	TObjectPtr<USoundBase> TownMusic;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Story")
+	TObjectPtr<USoundBase> MapMusic;
+
+	UPROPERTY()
+	TObjectPtr<AStoryScene> Scene;
 
 	UPROPERTY()
 	TObjectPtr<const UArenaTheme> Theme;
@@ -129,6 +187,9 @@ private:
 	int32 Round = 0;
 	bool bWaveQueued = false;
 	bool bPlayerDead = false;
+	bool bStageCleared = false;
+	bool bGoldBanked = false;
+	EArenaScene SceneKind;
 
 	int32 Score = 0;
 	double WaveStartedAt = 0.0;

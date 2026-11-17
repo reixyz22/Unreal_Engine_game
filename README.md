@@ -14,7 +14,9 @@ A top-down wave-survival arena game in Unreal Engine 5.8, built with C++ and Pap
 - `AArenaEnemy`: base class for every enemy type (body, health, hit flash, red hover outline). `APyroEnemy` holds a casting range, spreads apart from other enemies, and floats slow, dodgeable beads (`AArenaProjectile`).
 - `AClericEnemy`: from wave 3, fires an arena-wide beam (`AArenaBeam`) that warns, then hangs in the air and stuns on touch. Always drops a shard (`AArenaPickup`): mana, or health if her mana is full.
 - Nikki's Q: costs 1 mana. She swings the guitar to her front and strums, and a comic-book burst (`AArenaShockwave`) expands across the screen, hitting every enemy once and erasing beads it passes over.
-- `UArenaTheme`: each run picks a random theme (music, floor, fog, enemy palette swaps) from Blueprint subclasses. Player characters and the HUD stay fixed for readability.
+- Story: the game opens in Nikki's hut (`AHutScene`), moves to her village (`ATownScene`), then a world map of stages. `AStoryScene` is the shared base: props, walk blocking, dialog with a typewriter effect, and cutscene steps chained with timers. All dialog is read from `Content/Story/Nikki.txt`.
+- `FArenaStats`: one League-style stat block and damage formula for heroes and enemies. Score becomes gold, and gold buys upgrades at the village stall (`ArenaShop`).
+- `UArenaTheme`: each stage on the world map has a theme (music, floor, fog, enemy palette swaps), a Blueprint subclass. Player characters and the HUD stay fixed for readability.
 - `UArenaSession`: a game-instance subsystem that survives restarts. It holds the chosen hero, the volume settings and the music, and plays every sound effect.
 - Score: kills chained by one spell (a chain throw or a Q burst) double in value and call out COOL, RADICAL, FANTASTIC, SPECTACULAR, LEGENDARY. Fast wave clears add a bonus. On death there's a YOU DIED / Continue screen and a saved top-10 leaderboard with arcade initials (`UArenaLeaderboard`).
 - `UHealthComponent`: shared by Nikki and Pyros; health plus i-frames so converging hits can't stack in one moment.

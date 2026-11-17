@@ -20,11 +20,16 @@ UArenaSession* UArenaSession::Get(const UObject* WorldContext)
 
 void UArenaSession::PlayMusic(USoundBase* Music)
 {
+	// The player outlives level reloads, so walking from the hut to the village keeps the tune going.
+	if (IsValid(MusicPlayer) && MusicPlayer->Sound == Music && MusicPlayer->IsPlaying())
+	{
+		return;
+	}
 	if (IsValid(MusicPlayer))
 	{
 		MusicPlayer->Stop();
 	}
-	MusicPlayer = Music ? UGameplayStatics::CreateSound2D(GetGameInstance()->GetWorld(), Music) : nullptr;
+	MusicPlayer = Music ? UGameplayStatics::CreateSound2D(GetGameInstance()->GetWorld(), Music, 1.f, 1.f, 0.f, nullptr, true, false) : nullptr;
 	if (IsValid(MusicPlayer))
 	{
 		// UI sounds keep playing while the game is paused, so menus have music.
@@ -32,6 +37,17 @@ void UArenaSession::PlayMusic(USoundBase* Music)
 		ApplyMusicVolume();
 		MusicPlayer->FadeIn(MusicFadeInSeconds);
 	}
+}
+
+void UArenaSession::Travel(const UObject* WorldContext, EArenaScene NewScene, int32 NewStageIndex)
+{
+	PreviousScene = Scene;
+	Scene = NewScene;
+	if (NewStageIndex != INDEX_NONE)
+	{
+		StageIndex = NewStageIndex;
+	}
+	UGameplayStatics::OpenLevel(WorldContext, FName(*UGameplayStatics::GetCurrentLevelName(WorldContext, true)));
 }
 
 void UArenaSession::PlaySfx(const UObject* WorldContext, USoundBase* Sound)

@@ -13,8 +13,9 @@ namespace
 
 AClericEnemy::AClericEnemy()
 {
-	MaxHealth = 45.f;
-	MoveSpeed = 90.f;
+	Stats.MaxHealth = 45.f;
+	Stats.AbilityPower = 15.f;
+	Stats.MoveSpeed = 90.f;
 }
 
 void AClericEnemy::BeginPlay()
@@ -46,7 +47,7 @@ void AClericEnemy::Tick(float DeltaTime)
 	}
 	const double Distance = ToPlayer.Size();
 	const double Step = FMath::Clamp(Distance - PreferredRange, -1.0, 1.0);
-	MoveWithinArena(ToPlayer.GetSafeNormal() * Step * MoveSpeed * DeltaTime);
+	MoveWithinArena(ToPlayer.GetSafeNormal() * Step * Stats.MoveSpeed * DeltaTime);
 }
 
 void AClericEnemy::CastBeam()
@@ -61,7 +62,7 @@ void AClericEnemy::CastBeam()
 	Settings.WarningSeconds = WarningSeconds;
 	Settings.ActiveSeconds = BeamSeconds;
 	Settings.Width = BeamWidth;
-	Settings.Damage = BeamDamage;
+	Settings.Damage = Stats.AbilityPower;
 	Settings.StunSeconds = StunSeconds;
 	Settings.ChargeSound = BeamChargeSound;
 	Settings.FireSound = BeamFireSound;

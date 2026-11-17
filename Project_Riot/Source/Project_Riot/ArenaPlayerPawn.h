@@ -1,10 +1,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ArenaStats.h"
 #include "GameFramework/Pawn.h"
 #include "ArenaPlayerPawn.generated.h"
 
 class AArenaEnemy;
+class AStoryScene;
 class UCameraComponent;
 class UHealthComponent;
 class UInputAction;
@@ -31,12 +33,12 @@ public:
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	virtual void NotifyControllerChanged() override;
 
-	bool ReceiveDamage(float Amount);
+	bool ReceiveDamage(float Amount, EDamageType Type);
 	float GetRadius() const;
 	FVector GetHandLocation() const;
 	void OnChainReturned();
 
-	bool ReceiveStunHit(float Amount, float StunSeconds);
+	bool ReceiveStunHit(float Amount, EDamageType Type, float StunSeconds);
 	void Heal(float Amount);
 	void AddMana(int32 Amount) { Mana = FMath::Min(Mana + Amount, MaxMana); }
 
@@ -55,6 +57,13 @@ public:
 	const FText& GetHeroName() const { return HeroName; }
 	UPaperSprite* GetPortrait() const;
 	int32 GetSpecialCost() const { return SpecialManaCost; }
+	// Q needs the guitar, which is bought at the village stall.
+	bool HasSpecial() const;
+	const FArenaStats& GetStats() const { return Stats; }
+	// Recomputes stats from base + purchases (call after buying something).
+	void RefreshStats();
+	// Story: her lightning pyjamas, worn until she gets dressed in the intro.
+	void SetPyjamas(bool bWear);
 
 protected:
 	virtual void BeginPlay() override;
@@ -63,6 +72,8 @@ private:
 	void Move(const FInputActionValue& Value);
 	void StopMove();
 	void UpdateHover();
+	void TickStoryScene(AStoryScene& Scene);
+	UPaperFlipbook* Outfit(UPaperFlipbook* Normal, UPaperFlipbook* Pyjama) const;
 	void HandleRightClick();
 	void UpdateMovement(float DeltaTime);
 	FVector2D ComputeMoveDirection();
@@ -101,8 +112,9 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> MoveAction;
 
-	UPROPERTY(EditAnywhere, Category = "Movement")
-	float MoveSpeed = 400.f;
+	// Her stats before shop upgrades. Stats (below) is what the game uses.
+	UPROPERTY(EditAnywhere, Category = "Stats")
+	FArenaStats BaseStats;
 
 	// Off by default: WASD plays better. Right-click still attacks; with this on it also walks.
 	UPROPERTY(EditAnywhere, Category = "Movement")
@@ -127,6 +139,15 @@ private:
 	TObjectPtr<UPaperFlipbook> StrikeAnim;
 
 	UPROPERTY(EditAnywhere, Category = "Look")
+	TObjectPtr<UPaperFlipbook> PyjamaIdle;
+
+	UPROPERTY(EditAnywhere, Category = "Look")
+	TObjectPtr<UPaperFlipbook> PyjamaRun;
+
+	UPROPERTY(EditAnywhere, Category = "Look")
+	TObjectPtr<UPaperFlipbook> PyjamaStrike;
+
+	UPROPERTY(EditAnywhere, Category = "Look")
 	FLinearColor BodyTint = FLinearColor::White;
 
 	// Hardware cursor images, relative to Content/ and without the extension.
@@ -145,8 +166,9 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Auto Attack")
 	TObjectPtr<UPaperSprite> ChainLinkSprite;
 
+	// Auto damage = Attack Damage x this (physical).
 	UPROPERTY(EditAnywhere, Category = "Auto Attack")
-	float AutoDamage = 16.f;
+	float AutoDamageRatio = 1.f;
 
 	UPROPERTY(EditAnywhere, Category = "Auto Attack")
 	float AutoRange = 650.f;
@@ -169,8 +191,9 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Special")
 	int32 SpecialManaCost = 1;
 
+	// Q damage = Ability Power x this (magic).
 	UPROPERTY(EditAnywhere, Category = "Special")
-	float SpecialDamage = 16.f;
+	float SpecialDamageRatio = 1.f;
 
 	UPROPERTY(EditAnywhere, Category = "Special")
 	float SpecialRadius = 1100.f;
@@ -197,6 +220,8 @@ private:
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> Fog;
 
+	FArenaStats Stats;
+	bool bPyjamas = false;
 	int32 Mana = 0;
 	bool bFogEnabled = true;
 	double StunnedUntil = 0.0;
