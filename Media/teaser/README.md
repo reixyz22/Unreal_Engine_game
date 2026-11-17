@@ -8,10 +8,6 @@ Each shot in `SHOTS` names a recording, a start and end time, and a crop. A shot
 python Media/teaser/make_teaser.py
 ```
 
-## Wanted shots
-
-- Nikki fighting in Space. Carl stands in for now.
-
 ## Credits
 
 The rocket launch is NASA footage ("Artemis I Launch (Press Site)", images.nasa.gov, 2022), public domain. The script expects it at `Videos/nasa_launch/artemis1_launch_small.mp4`.
