@@ -1,6 +1,15 @@
 # Project Riot (working title)
 
-![Gameplay](Media/gameplay.gif)
+<table>
+  <tr>
+    <th>Gameplay</th>
+    <th>Trailer</th>
+  </tr>
+  <tr>
+    <td><img src="Media/gameplay.gif" alt="Gameplay"></td>
+    <td><img src="Media/teaser.gif" alt="Trailer"></td>
+  </tr>
+</table>
 
 A top-down wave-survival arena game in Unreal Engine 5.8, built with C++ and Paper2D. Nikki, a pink pop star with a ball and chain and a guitar on her back, holds off growing waves of Pyros and Clerics; rounds survived is the score.
 
