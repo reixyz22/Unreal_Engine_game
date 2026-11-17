@@ -150,6 +150,42 @@ def export_hut_props():
     save(outline(poof, (170, 170, 190, 255)), "Poof")
 
 
+# ---------------------------------------------------------------- Carl
+
+CARL_COLOURS = {(238, 142, 46): (44, 40, 58), (250, 203, 62): (72, 66, 96),
+                (75, 167, 71): (62, 96, 210), (61, 115, 79): (40, 62, 150)}
+
+
+def carl_frame(anim, index):
+    """The pack's elf with dark hair and a blue tunic."""
+    return recolor(Image.open(PACK / f"elf_m_{anim}_anim_f{index}.png"), CARL_COLOURS)
+
+
+def export_carl():
+    for anim, name in (("idle", "Idle"), ("run", "Run")):
+        for index in range(4):
+            save(carl_frame(anim, index), f"Carl_{name}_{index}")
+    Image.open(PACK / "weapon_arrow.png").save(STORY / "Arrow_Shot.png")
+    Image.open(PACK / "weapon_bow.png").save(STORY / "Bow.png")
+
+    # His bed with him in it, for the "back to bed" beat.
+    asleep = bed()
+    asleep.alpha_composite(carl_frame("idle", 0).crop((0, 9, 16, 19)), (4, 2))
+    ImageDraw.Draw(asleep).rectangle((2, 13, 21, 15), fill=(214, 88, 150, 255))
+    save(asleep, "Bed_Carl")
+
+    dog, draw = new((16, 12))
+    draw.rectangle((2, 4, 11, 9), fill=(196, 150, 96, 255), outline=OUTLINE)       # body
+    draw.rectangle((9, 1, 14, 6), fill=(196, 150, 96, 255), outline=OUTLINE)       # head
+    draw.rectangle((9, 0, 10, 2), fill=(120, 84, 52, 255))                         # ear
+    draw.point((13, 3), fill=OUTLINE)                                              # eye
+    draw.point((14, 5), fill=(230, 90, 110, 255))                                  # tongue
+    draw.line((1, 3, 2, 5), fill=(196, 150, 96, 255))                              # tail
+    for x in (3, 6, 9):
+        draw.line((x, 10, x, 11), fill=OUTLINE)
+    save(dog, "Dog")
+
+
 # ---------------------------------------------------------------- phone
 
 def export_phone():
@@ -162,9 +198,7 @@ def export_phone():
     save(phone, "Phone_UI")
 
     # Carl: the pack's elf with dark hair and a blue tunic, proudly holding up a Pyro like a fish.
-    carl = recolor(Image.open(PACK / "elf_m_idle_anim_f0.png"), {
-        (238, 142, 46): (44, 40, 58), (250, 203, 62): (72, 66, 96),
-        (75, 167, 71): (62, 96, 210), (61, 115, 79): (40, 62, 150)})
+    carl = carl_frame("idle", 0)
     save(carl, "NPC_Carl")
     pfp, draw = new((32, 32))
     draw.ellipse((0, 0, 31, 31), fill=(150, 210, 240, 255), outline=OUTLINE)
@@ -364,6 +398,7 @@ def main():
     export_pyjamas()
     export_hut_floor()
     export_hut_props()
+    export_carl()
     export_phone()
     export_town_floor()
     export_town_props()

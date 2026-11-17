@@ -4,8 +4,10 @@
 #include "StoryScene.h"
 #include "HutScene.generated.h"
 
-// Nikki's hut. The first visit plays the intro: Carl's text wakes her, she blocks him,
-// smashes the bed, gets dressed, and heads out.
+// The hero's home. The first visit plays their intro.
+//   Nikki: Carl's text wakes her, she blocks him, smashes the bed, gets dressed, heads out.
+//   Carl: already up, he texts his crush, finds he's blocked, goes back to bed, and is
+//         woken later by his dog.
 UCLASS()
 class PROJECT_RIOT_API AHutScene : public AStoryScene
 {
@@ -23,6 +25,11 @@ private:
 	void WakeUp();
 	void SmashBed();
 	void GetDressed();
+
+	void PlayCarlIntro();
+	void TextCrush();
+	void BackToBed();
+	void WakeWithDog();
 
 	UPROPERTY()
 	TObjectPtr<AStoryProp> Bed;

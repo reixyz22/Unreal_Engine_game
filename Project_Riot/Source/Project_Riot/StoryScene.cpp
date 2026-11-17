@@ -38,6 +38,14 @@ void AStoryScene::Tick(float DeltaTime)
 		StartScene();
 	}
 
+	// A line queued from somewhere she couldn't talk (a purchase on the world map).
+	UArenaSession& Session = GetSession();
+	if (!Session.PendingSection.IsEmpty() && !BlocksInput())
+	{
+		Say(Session.PendingSection);
+		Session.PendingSection.Reset();
+	}
+
 	TickDialog(DeltaTime);
 	UpdateFocus();
 
@@ -229,6 +237,18 @@ void AStoryScene::MoveHeroTo(const FVector2D& Where)
 	{
 		Hero->SetActorLocation(FVector(Where.X, Hero->GetActorLocation().Y, Where.Y));
 	}
+}
+
+void AStoryScene::LoadHeroScript()
+{
+	const AArenaPlayerPawn* Hero = GetHero();
+	Script = FStoryScript::Load(Hero ? Hero->GetScriptName() : TEXT("Nikki"));
+}
+
+bool AStoryScene::IsHero(const TCHAR* Name) const
+{
+	const AArenaPlayerPawn* Hero = GetHero();
+	return Hero && Hero->GetScriptName() == Name;
 }
 
 UPaperSprite* AStoryScene::GetPortrait() const

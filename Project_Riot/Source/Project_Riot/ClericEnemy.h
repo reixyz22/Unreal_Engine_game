@@ -8,7 +8,7 @@ class UPaperSprite;
 class USoundBase;
 
 // Slow caster: keeps its distance and fires an arena-wide stun beam at the player.
-// Always drops a shard: mana, or health if the player's mana is already full.
+// Sometimes drops a shard: mana, or health if the player's mana is already full.
 UCLASS()
 class PROJECT_RIOT_API AClericEnemy : public AArenaEnemy
 {
@@ -40,6 +40,13 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Cleric")
 	TObjectPtr<USoundBase> BeamFireSound;
+
+	// Chance to drop a mana shard on death; if her mana is full, a smaller chance of a health shard instead.
+	UPROPERTY(EditDefaultsOnly, Category = "Cleric")
+	float ManaDropChance = 0.5f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Cleric")
+	float HealthDropChance = 0.25f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Cleric")
 	float PreferredRange = 600.f;

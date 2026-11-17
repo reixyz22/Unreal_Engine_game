@@ -11,7 +11,7 @@ import unreal
 
 SOURCE = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir() + "../ArtSource/")
 sys.path.insert(0, SOURCE)
-from stage_table import NIKKI_ROUTE  # noqa: E402
+from stage_table import CARL_ROUTE, NIKKI_ROUTE  # noqa: E402
 
 ART = "/Game/Art"
 CORE = "/Game/Core"
@@ -424,10 +424,10 @@ def build_themes(pyro, cleric, music, spaceman):
     return {bp.get_name(): bp for bp in (dungeon, space, nikki, desert, far_desert, elf_world)}
 
 
-def build_route(themes):
-    """Nikki's world-map route, from stage_table.py."""
+def build_route(themes, stops):
+    """A hero's world-map route, from stage_table.py."""
     route = []
-    for name, theme, (u, v), placeholder in NIKKI_ROUTE:
+    for name, theme, (u, v), placeholder in stops:
         stop = unreal.StageDef()
         stop.set_editor_property("name", unreal.Text(name))
         if theme:
@@ -506,20 +506,34 @@ def main():
     story_art = {name: unreal.load_asset(f"{STORY_ART}/{name}_Sprite") for name in story_names}
     story_art["Floor_Hut"] = unreal.load_asset(f"{ART}/T_Floor_Hut_Sprite")
     story_art["Floor_Town"] = unreal.load_asset(f"{ART}/T_Floor_Town_Sprite")
-    story_sounds = {name: sounds[f"SFX_{name}"] for name in STORY_SOUNDS}
     nikki_bp = unreal.load_asset(f"{CORE}/BP_ArenaPlayerPawn")
+    story_art["Aura"] = unreal.load_asset(f"{ART}/Shock_Burst_Sprite")
+    story_sounds = {name: sounds[f"SFX_{name}"] for name in STORY_SOUNDS}
+
+    # Carl: a second hero Blueprint. Input assets are copied from Nikki's.
+    nikki_defaults = unreal.get_default_object(nikki_bp.generated_class())
+    carl_bp = blueprint("BP_CarlPawn", unreal.CarlPawn)
+    set_defaults(carl_bp,
+                 input_mapping=nikki_defaults.get_editor_property("input_mapping"),
+                 move_action=nikki_defaults.get_editor_property("move_action"),
+                 idle_anim=copy_speed("FB_CarlIdle", "Carl_Idle", 4, "FB_PyroRun"),
+                 run_anim=copy_speed("FB_CarlRun", "Carl_Run", 4, "FB_PyroRun"),
+                 arrow_sprite=unreal.load_asset(f"{STORY_ART}/Arrow_Shot_Sprite"),
+                 fog_material=fog, throw_sound=sounds["SFX_ChainThrow"],
+                 route=build_route(themes, CARL_ROUTE))
     # Pyros fill every wave; Clerics join from wave 3 at a fifth of the wave.
     set_defaults(unreal.load_asset(f"{CORE}/BP_ArenaGameMode"),
                  spawn_rules=[spawn_rule(pyro, 1, 4.0), spawn_rule(cleric, 3, 1.0)],
                  hud_class=hud.generated_class(),
-                 heroes=[nikki_bp.generated_class()],
-                 route=build_route(themes), story_art=story_art, story_sounds=story_sounds,
+                 heroes=[nikki_bp.generated_class(), carl_bp.generated_class()],
+                 story_art=story_art, story_sounds=story_sounds,
                  town_music=theme_music["Town"], map_music=theme_music["Map"])
     set_defaults(unreal.load_asset(f"{CORE}/BP_ArenaPlayerPawn"), fog_material=fog,
                  guitar_sprite=unreal.load_asset(f"{ART}/Nikki_Guitar_Sprite"),
                  shock_burst_sprite=unreal.load_asset(f"{ART}/Shock_Burst_Sprite"),
                  throw_sound=sounds["SFX_ChainThrow"], chain_hit_sound=sounds["SFX_ChainHit"],
                  strum_sound=sounds["SFX_Strum"],
+                 route=build_route(themes, NIKKI_ROUTE),
                  chain_link_sprite=unreal.load_asset(f"{ART}/Chain_Link_Sprite"),
                  pyjama_idle=copy_speed("FB_NikkiPJIdle", "Nikki_PJ_Idle", 6, "FB_NikkiIdle"),
                  pyjama_run=copy_speed("FB_NikkiPJRun", "Nikki_PJ_Run", 4, "FB_NikkiRun"),

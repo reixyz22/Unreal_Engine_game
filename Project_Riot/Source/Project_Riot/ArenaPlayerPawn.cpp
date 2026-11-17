@@ -215,10 +215,7 @@ void AArenaPlayerPawn::Tick(float DeltaTime)
 		{
 			HandleRightClick();
 		}
-		if (PlayerController->WasInputKeyJustPressed(EKeys::Q))
-		{
-			CastSpecial();
-		}
+		HandleSpecialKeys(*PlayerController);
 	}
 	UpdateSpecial();
 	UpdateMovement(DeltaTime);
@@ -264,12 +261,25 @@ void AArenaPlayerPawn::RefreshStats()
 	}
 	Health->SetMaxHealth(Stats.MaxHealth);
 	Guitar->SetVisibility(HasSpecial());
+	if (const UArenaSession* Session = UArenaSession::Get(this))
+	{
+		BodyTint = ArenaShop::OutfitTint(*Session);
+		Body->SetSpriteColor(BodyTint);
+	}
 }
 
 bool AArenaPlayerPawn::HasSpecial() const
 {
 	const UArenaSession* Session = UArenaSession::Get(this);
 	return Session && Session->Owns(ArenaShop::Guitar);
+}
+
+void AArenaPlayerPawn::HandleSpecialKeys(const APlayerController& PlayerController)
+{
+	if (PlayerController.WasInputKeyJustPressed(EKeys::Q))
+	{
+		CastSpecial();
+	}
 }
 
 void AArenaPlayerPawn::UpdateHover()

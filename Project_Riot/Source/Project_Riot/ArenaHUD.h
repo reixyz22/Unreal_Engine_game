@@ -31,7 +31,7 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void DrawHUD() override;
 
-	// Opens the village stall's shop screen.
+	// Opens the shop (reached from the home town on the world map).
 	void OpenShop();
 
 private:
@@ -87,6 +87,8 @@ private:
 	void DrawShop();
 	void TickWorldMap();
 	void TickDebug();
+	void TickCheatCode();
+	void CloseShop();
 	void TravelToMapNode(int32 Index);
 	TArray<FString> WrapText(const FString& Text, float MaxWidth, UFont* Font, float Scale) const;
 	// Draws wrapped text, revealing at most MaxChars characters. Returns the height used.
@@ -151,6 +153,7 @@ private:
 	EScreen CurrentScreen = EScreen::Playing;
 	EScreen CreditsReturnTo = EScreen::Paused;
 	int32 MapSelection = 0;
+	FString CheatTyped;
 	float PhoneSlide = 0.f;
 	double ClearNoticedAt = -1.0;
 	double DeathNoticedAt = -1.0;

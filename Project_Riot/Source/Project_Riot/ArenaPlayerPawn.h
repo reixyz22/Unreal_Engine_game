@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ArenaStage.h"
 #include "ArenaStats.h"
 #include "GameFramework/Pawn.h"
 #include "ArenaPlayerPawn.generated.h"
@@ -21,6 +22,8 @@ class USoundBase;
 class USphereComponent;
 struct FInputActionValue;
 
+// The playable hero. This class is Nikki (flail auto, guitar Q); other heroes subclass it
+// and override the attack and special hooks (see ACarlPawn).
 UCLASS()
 class PROJECT_RIOT_API AArenaPlayerPawn : public APawn
 {
@@ -53,12 +56,17 @@ public:
 	void SetClickToMove(bool bEnabled);
 	bool IsFogEnabled() const { return bFogEnabled; }
 	void SetFogEnabled(bool bEnabled);
-	UPaperSprite* GetSpecialIcon() const { return GuitarSprite; }
+	virtual UPaperSprite* GetSpecialIcon() const { return GuitarSprite; }
 	const FText& GetHeroName() const { return HeroName; }
 	UPaperSprite* GetPortrait() const;
 	int32 GetSpecialCost() const { return SpecialManaCost; }
-	// Q needs the guitar, which is bought at the village stall.
-	bool HasSpecial() const;
+	// Nikki's Q needs the guitar, which is bought at the shop.
+	virtual bool HasSpecial() const;
+	// The key shown on the specials bar.
+	virtual FString GetSpecialKey() const { return TEXT("Q"); }
+	// Each hero has their own world-map route and their own script file in Content/Story.
+	const TArray<FStageDef>& GetRoute() const { return Route; }
+	const FString& GetScriptName() const { return ScriptName; }
 	const FArenaStats& GetStats() const { return Stats; }
 	// Recomputes stats from base + purchases (call after buying something).
 	void RefreshStats();
@@ -68,13 +76,16 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
-private:
+	// Right-click during combat: the hero's auto attack.
+	virtual void HandleRightClick();
+	// Checked every frame during combat: the hero's special keys.
+	virtual void HandleSpecialKeys(const APlayerController& PlayerController);
+
 	void Move(const FInputActionValue& Value);
 	void StopMove();
 	void UpdateHover();
 	void TickStoryScene(AStoryScene& Scene);
 	UPaperFlipbook* Outfit(UPaperFlipbook* Normal, UPaperFlipbook* Pyjama) const;
-	void HandleRightClick();
 	void UpdateMovement(float DeltaTime);
 	FVector2D ComputeMoveDirection();
 	void ThrowChainAt(AArenaEnemy* Target);
@@ -128,6 +139,12 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Look")
 	FText HeroName = NSLOCTEXT("Arena", "Nikki", "Nikki");
+
+	UPROPERTY(EditDefaultsOnly, Category = "Story")
+	FString ScriptName = TEXT("Nikki");
+
+	UPROPERTY(EditDefaultsOnly, Category = "Story")
+	TArray<FStageDef> Route;
 
 	UPROPERTY(EditAnywhere, Category = "Look")
 	TObjectPtr<UPaperFlipbook> IdleAnim;

@@ -21,12 +21,13 @@ namespace
 
 void AHutScene::StartScene()
 {
-	Script = FStoryScript::Load(TEXT("Nikki"));
+	LoadHeroScript();
 	SetFloor(TEXT("Floor_Hut"));
 	Bounds = FBox2D(-RoomHalf, RoomHalf);
 
 	UArenaSession& Session = GetSession();
-	Bed = AddProp(Session.bBedSmashed ? TEXT("Bed_Broken") : TEXT("Bed_Nikki"), BedSpot);
+	const bool bCarl = IsHero(TEXT("Carl"));
+	Bed = AddProp(Session.bBedSmashed ? TEXT("Bed_Broken") : bCarl ? TEXT("Bed") : TEXT("Bed_Nikki"), BedSpot);
 	Nightstand = AddProp(TEXT("Nightstand"), NightstandSpot);
 	Closet = AddProp(TEXT("Closet"), ClosetSpot);
 	Door = AddProp(TEXT("Door"), DoorSpot, false);
@@ -36,6 +37,11 @@ void AHutScene::StartScene()
 		// Back home later: no cutscene, just the room as she left it.
 		bDoorOpen = true;
 		MoveHeroTo(EntrySpot);
+		return;
+	}
+	if (bCarl)
+	{
+		PlayCarlIntro();
 		return;
 	}
 	PlayIntro();
@@ -94,8 +100,82 @@ void AHutScene::Tick(float DeltaTime)
 	}
 }
 
+void AHutScene::PlayCarlIntro()
+{
+	// He is already awake, sitting on the edge of the bed with his phone in reach.
+	MoveHeroTo(WakeSpot);
+	Objective = TEXT("Your phone is on the nightstand.");
+	PointAt(Nightstand);
+	Nightstand->Prompt = TEXT("Text your crush");
+	Nightstand->OnUse = [this]() { TextCrush(); };
+}
+
+void AHutScene::TextCrush()
+{
+	Nightstand->OnUse = nullptr;
+	PointAt(nullptr);
+	Objective.Reset();
+	bLockInput = true;
+
+	const TArray<FStoryLine> Text = Script.Get(TEXT("phone_text"));
+	Phone.bShown = true;
+	Phone.Sender = TEXT("Nikki");
+	Phone.Message = Text[0].Text;
+	Phone.CharsShown = 0.f;
+	bPhoneTyping = true;
+}
+
+void AHutScene::BackToBed()
+{
+	if (AArenaPlayerPawn* Hero = GetHero())
+	{
+		Hero->SetActorHiddenInGame(true);
+	}
+	Bed->SetArt(Art(TEXT("Bed_Carl")));
+	Bed->Punch();
+	Popup(TEXT("...zzz"), *Bed);
+	After(3.f, [this]() { WakeWithDog(); });
+}
+
+void AHutScene::WakeWithDog()
+{
+	Bed->SetArt(Art(TEXT("Bed")));
+	Sfx(TEXT("Poof"));
+	if (AArenaPlayerPawn* Hero = GetHero())
+	{
+		Hero->SetActorHiddenInGame(false);
+	}
+	AStoryProp* Dog = AddProp(TEXT("Dog"), WakeSpot + FVector2D(70.0, -30.0), false);
+	Dog->Wobble(2.5f);
+
+	Say(TEXT("dog_wake"), [this]()
+	{
+		bLockInput = false;
+		GetSession().bDressed = true;
+		Objective = TEXT("Head outside.");
+		PointAt(Door);
+		bDoorOpen = true;
+	});
+}
+
 void AHutScene::OnPhoneRead()
 {
+	if (IsHero(TEXT("Carl")))
+	{
+		// His text never lands: the block shows first, then it sinks in.
+		Phone.bBlocked = true;
+		Sfx(TEXT("Stamp"));
+		After(1.6f, [this]()
+		{
+			Say(TEXT("phone_react"), [this]()
+			{
+				Phone.bShown = false;
+				BackToBed();
+			});
+		});
+		return;
+	}
+
 	Say(TEXT("phone_react"), [this]()
 	{
 		Phone.bBlocked = true;

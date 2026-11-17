@@ -1,6 +1,5 @@
 #include "TownScene.h"
 
-#include "ArenaHUD.h"
 #include "ArenaPlayerPawn.h"
 #include "ArenaSession.h"
 #include "GameFramework/PlayerController.h"
@@ -46,21 +45,23 @@ namespace
 
 void ATownScene::StartScene()
 {
-	Script = FStoryScript::Load(TEXT("Nikki"));
+	LoadHeroScript();
+	// Carl's city is a placeholder mirror image of Nikki's village.
+	const FVector2D Flip(IsHero(TEXT("Carl")) ? -1.0 : 1.0, 1.0);
 	SetFloor(TEXT("Floor_Town"));
 	Bounds = FBox2D(FVector2D(-TownHalf), FVector2D(TownHalf));
 
 	for (const FTownSpot& Spot : Spots)
 	{
-		AddTalker(Spot.Art, Spot.Where, Spot.Prompt, Spot.Section);
+		AddTalker(Spot.Art, Spot.Where * Flip, Spot.Prompt, Spot.Section);
 	}
 	for (const FVector2D& Tree : Trees)
 	{
-		AddProp(TEXT("Tree"), Tree);
+		AddProp(TEXT("Tree"), Tree * Flip);
 	}
 
 	UArenaSession& Session = GetSession();
-	Contract = AddProp(Session.bContractSigned ? TEXT("Contract_Signed") : TEXT("Contract"), FVector2D(330.0, -740.0));
+	Contract = AddProp(Session.bContractSigned ? TEXT("Contract_Signed") : TEXT("Contract"), FVector2D(330.0, -740.0) * Flip);
 	if (!Session.bContractSigned)
 	{
 		Contract->Prompt = TEXT("Sign with your flail");
@@ -69,11 +70,6 @@ void ATownScene::StartScene()
 		Objective = TEXT("Find the village elder by the south gate.");
 		PointAt(Contract);
 	}
-
-	AddProp(TEXT("NPC_Merchant"), FVector2D(-330.0, -740.0), false);
-	AStoryProp* Stall = AddProp(TEXT("Stall"), FVector2D(-330.0, -800.0));
-	Stall->Prompt = TEXT("Shop");
-	Stall->OnUse = [this]() { OpenShop(); };
 
 	Gate = AddProp(TEXT("Gate"), FVector2D(0.0, -1470.0), false);
 
@@ -112,15 +108,6 @@ void ATownScene::SignContract()
 			});
 		});
 	});
-}
-
-void ATownScene::OpenShop()
-{
-	const APlayerController* Controller = UGameplayStatics::GetPlayerController(this, 0);
-	if (AArenaHUD* Hud = Controller ? Controller->GetHUD<AArenaHUD>() : nullptr)
-	{
-		Hud->OpenShop();
-	}
 }
 
 void ATownScene::Tick(float DeltaTime)

@@ -55,7 +55,11 @@ public:
 	int32 StageIndex = 1;
 	int32 HighestUnlocked = 1;
 	int32 Gold = 0;
+	// Money, in cents. Score pays out one cent per point.
 	TMap<FName, int32> Purchases;
+	FName Outfit;
+	// A script section to play when she is next somewhere she can talk (bought on the map).
+	FString PendingSection;
 	bool bIntroSeen = false;
 	bool bBedSmashed = false;
 	bool bDressed = false;

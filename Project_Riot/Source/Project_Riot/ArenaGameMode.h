@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ArenaStage.h"
 #include "GameFramework/GameModeBase.h"
 #include "ArenaGameMode.generated.h"
 
@@ -26,30 +27,6 @@ struct FEnemySpawnRule
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	float Weight = 1.f;
-};
-
-// One stop on the world map. Index 0 is the home village; the rest are combat stages.
-USTRUCT(BlueprintType)
-struct FStageDef
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FText Name;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TSubclassOf<UArenaTheme> Theme;
-
-	// Where it sits on the world map, 0..1 from the top-left.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FVector2D MapPosition = FVector2D(0.5, 0.5);
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	int32 Waves = 15;
-
-	// Still a stand-in: shown as work in progress on the map.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	bool bPlaceholder = false;
 };
 
 // A "COOL!"-style callout over a kill, for the HUD to draw.
@@ -94,7 +71,10 @@ public:
 	EArenaScene GetSceneKind() const { return SceneKind; }
 	bool IsCombatStage() const;
 	AStoryScene* GetScene() const { return Scene; }
-	const TArray<FStageDef>& GetRoute() const { return Route; }
+	// The chosen hero's route across the world map.
+	const TArray<FStageDef>& GetRoute() const;
+	// Debug cheat: wipe the stage and count it as cleared.
+	void BeatStage();
 	int32 GetStageWaves() const;
 	bool IsStageCleared() const { return bStageCleared; }
 
@@ -136,10 +116,6 @@ private:
 	// Playable heroes, shown on the start screen.
 	UPROPERTY(EditDefaultsOnly, Category = "Heroes")
 	TArray<TSubclassOf<AArenaPlayerPawn>> Heroes;
-
-	// Nikki's route across the world map.
-	UPROPERTY(EditDefaultsOnly, Category = "Story")
-	TArray<FStageDef> Route;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Story")
 	TMap<FName, TObjectPtr<UPaperSprite>> StoryArt;

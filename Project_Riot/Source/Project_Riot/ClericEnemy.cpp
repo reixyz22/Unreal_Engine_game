@@ -81,7 +81,8 @@ void AClericEnemy::Die()
 
 	FVector DropAt = GetActorLocation();
 	DropAt.Y = PickupDepth;
-	if (AArenaPickup* Shard = GetWorld()->SpawnActor<AArenaPickup>(DropAt, FRotator::ZeroRotator))
+	const bool bDrops = FMath::FRand() < (bManaFull ? HealthDropChance : ManaDropChance);
+	if (AArenaPickup* Shard = bDrops ? GetWorld()->SpawnActor<AArenaPickup>(DropAt, FRotator::ZeroRotator) : nullptr)
 	{
 		Shard->Init(bManaFull ? EPickupKind::Health : EPickupKind::Mana, bManaFull ? HealthShardSprite : ManaShardSprite);
 	}

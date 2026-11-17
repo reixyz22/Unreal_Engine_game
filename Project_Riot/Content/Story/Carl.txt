@@ -1,0 +1,59 @@
+# Carl's story script.
+#
+# William: everything here is PLACEHOLDER writing for you to replace. Same rules as
+# Nikki.txt: [name] starts a section, "Speaker: text" is one dialog box, # is a comment.
+# Carl's town is a mirror of Nikki's for now, so the section names match hers.
+
+# ---------------------------------------------------------------- his room
+
+[phone_text]
+Carl: (William: the text Carl sends his crush goes here.)
+
+[phone_react]
+Carl: ...Blocked.
+Carl: I'm going back to bed.
+
+[dog_wake]
+Carl: Okay, okay. I'm up. Good dog.
+
+# ---------------------------------------------------------------- his city
+
+[home_door]
+Carl: (William: Carl's line about home.)
+
+[sign_village]
+Sign: ELF CITY. (William: welcome sign text.)
+
+[sign_eviction]
+Notice: (William: sign text for this house.)
+
+[sign_rent]
+Notice: NOTICE OF RENT INCREASE.
+
+[sign_vote]
+Yard Sign: (William: yard sign text.)
+
+[house_nice]
+Carl: (William: empty slot.)
+
+[house_plain]
+Carl: (William: empty slot.)
+
+[well]
+Carl: (William: empty slot.)
+
+[sarah_talk]
+Elder: (William: the elf city elder's greeting. The art is a stand-in.)
+
+[contract]
+Contract: EMPLOYMENT CONTRACT. (William: Carl's terms go here.)
+Elder: Sign at the bottom.
+
+[contract_signed]
+Elder: (William: the elder's line after Carl signs.)
+
+[gate_locked]
+Carl: I should find work before I leave. The elder is by the gate.
+
+[bought_volley]
+Carl: (William: Carl's line about his new volley.)

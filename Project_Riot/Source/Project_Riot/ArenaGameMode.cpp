@@ -7,6 +7,7 @@
 #include "TownScene.h"
 #include "ArenaPlayerPawn.h"
 #include "ArenaSession.h"
+#include "ArenaShockwave.h"
 #include "ArenaTheme.h"
 #include "PaperFlipbook.h"
 #include "PaperSpriteActor.h"
@@ -40,8 +41,34 @@ void AArenaGameMode::InitGame(const FString& MapName, const FString& Options, FS
 	// The session says which scene this load is; a stage takes its theme from the route.
 	const UArenaSession* Session = UArenaSession::Get(this);
 	SceneKind = Session ? Session->Scene : EArenaScene::Stage;
-	const FStageDef* Stage = Session && IsCombatStage() && Route.IsValidIndex(Session->StageIndex) ? &Route[Session->StageIndex] : nullptr;
+	const FStageDef* Stage = Session && IsCombatStage() && GetRoute().IsValidIndex(Session->StageIndex) ? &GetRoute()[Session->StageIndex] : nullptr;
 	Theme = Stage && Stage->Theme ? Stage->Theme->GetDefaultObject<UArenaTheme>() : GetDefault<UArenaTheme>();
+}
+
+const TArray<FStageDef>& AArenaGameMode::GetRoute() const
+{
+	// Before a hero is picked (the first start screen), the first hero's route stands in.
+	static const TArray<FStageDef> Empty;
+	const UArenaSession* Session = UArenaSession::Get(this);
+	const TSubclassOf<AArenaPlayerPawn> Hero = Session && Session->ChosenHero ? Session->ChosenHero : Heroes.IsEmpty() ? nullptr : Heroes[0];
+	return Hero ? Hero->GetDefaultObject<AArenaPlayerPawn>()->GetRoute() : Empty;
+}
+
+void AArenaGameMode::BeatStage()
+{
+	if (!IsCombatStage() || bStageCleared || bPlayerDead)
+	{
+		return;
+	}
+	// A map-wide blast, then skip straight to the last wave being done.
+	const APawn* Player = UGameplayStatics::GetPlayerPawn(this, 0);
+	if (AArenaShockwave* Blast = Player ? GetWorld()->SpawnActor<AArenaShockwave>(Player->GetActorLocation(), FRotator::ZeroRotator) : nullptr)
+	{
+		Blast->Launch(GetStoryArt(TEXT("Aura")), 100000.f, ArenaArt::ArenaHalfSize * 3.f, 0.6f);
+	}
+	GetWorldTimerManager().ClearTimer(WaveTimer);
+	bWaveQueued = false;
+	Round = GetStageWaves();
 }
 
 bool AArenaGameMode::IsCombatStage() const
@@ -52,7 +79,7 @@ bool AArenaGameMode::IsCombatStage() const
 int32 AArenaGameMode::GetStageWaves() const
 {
 	const UArenaSession* Session = UArenaSession::Get(this);
-	return Session && Route.IsValidIndex(Session->StageIndex) ? Route[Session->StageIndex].Waves : MAX_int32;
+	return Session && GetRoute().IsValidIndex(Session->StageIndex) ? GetRoute()[Session->StageIndex].Waves : MAX_int32;
 }
 
 void AArenaGameMode::BeginPlay()

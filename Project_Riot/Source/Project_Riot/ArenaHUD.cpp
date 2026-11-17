@@ -42,6 +42,8 @@ namespace
 	constexpr float ButtonCorner = 4.f;
 	constexpr double DeathScreenDelay = 1.2;
 	constexpr double StageClearDelay = 1.0;
+	// The arcade leaderboard is off in story mode; it returns with a free-play mode later.
+	constexpr bool bArcadeScores = false;
 	// World map art is 256 x 352.
 	constexpr float MapAspect = 256.f / 352.f;
 	constexpr double FadeInSeconds = 0.8;
@@ -122,6 +124,7 @@ void AArenaHUD::Tick(float DeltaSeconds)
 	}
 
 	TickDebug();
+	TickCheatCode();
 
 	// Escape in a packaged game; P too, because Escape stops Play-In-Editor.
 	const bool bPauseKey = PlayerOwner->WasInputKeyJustPressed(EKeys::Escape) || PlayerOwner->WasInputKeyJustPressed(EKeys::P);
@@ -166,7 +169,7 @@ void AArenaHUD::Tick(float DeltaSeconds)
 			if (Now - DeathNoticedAt > DeathScreenDelay)
 			{
 				Board = UArenaLeaderboard::Load();
-				ShowScreen(Board->Qualifies(GameMode->GetScore()) ? EScreen::Initials : EScreen::GameOver);
+				ShowScreen(bArcadeScores && Board->Qualifies(GameMode->GetScore()) ? EScreen::Initials : EScreen::GameOver);
 			}
 		}
 		else if (bPauseKey)
@@ -188,7 +191,7 @@ void AArenaHUD::Tick(float DeltaSeconds)
 	case EScreen::Shop:
 		if (bPauseKey)
 		{
-			ShowScreen(EScreen::Playing);
+			CloseShop();
 		}
 		else if (bClicked)
 		{
@@ -385,7 +388,7 @@ void AArenaHUD::DrawSpecialsBar(const AArenaPlayerPawn& Hero)
 		const FLinearColor Shade = bReady ? FLinearColor::White : FLinearColor(0.35f, 0.35f, 0.4f);
 		DrawTexture(Icon->GetBakedTexture(), X + 14.f, Y + 8.f, Slot - 28.f, SlotHeight - 16.f, 0.f, 0.f, 1.f, 1.f, Shade, BLEND_Translucent);
 	}
-	DrawText(TEXT("Q"), Gold, X + 6.f, Y + 4.f, GetMenuFont(), 1.f);
+	DrawText(Hero.GetSpecialKey(), Gold, X + 6.f, Y + 4.f, GetMenuFont(), 1.f);
 
 	const float PipsWidth = Hero.GetMaxMana() * (Pip + 6.f) - 6.f;
 	for (int32 Index = 0; Index < Hero.GetMaxMana(); ++Index)
@@ -499,7 +502,10 @@ UFont* AArenaHUD::GetMenuFont() const
 void AArenaHUD::DrawPanel(float X, float Y, float Width, float Height, const FString& Title)
 {
 	// The start screens hide the stage entirely; the pause menu dims it and takes the theme's tint.
-	const bool bStartScreen = CurrentScreen == EScreen::ChooseHero || CurrentScreen == EScreen::Controls || CurrentScreen == EScreen::WorldMap;
+	// Start screens and anything on the world map hide the world completely.
+	const AArenaGameMode* Mode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+	const bool bStartScreen = CurrentScreen == EScreen::ChooseHero || CurrentScreen == EScreen::Controls
+		|| (Mode && Mode->GetSceneKind() == EArenaScene::WorldMap);
 	if (bStartScreen && BackdropTexture)
 	{
 		const float Tile = BackdropTexture->GetSizeX() * UiScale;
@@ -626,7 +632,7 @@ void AArenaHUD::DrawControls()
 	static const TCHAR* Lines[] = {
 		TEXT("WASD  -  move"),
 		TEXT("Right-click an enemy  -  throw the ball and chain"),
-		TEXT("Q  -  shock blast (1 mana; Clerics drop mana shards)"),
+		TEXT("Q (Nikki) or 1 (Carl)  -  special, costs 1 mana; Clerics sometimes drop mana"),
 		TEXT("Esc  -  menu: pause, volume, fog  (P works too)"),
 	};
 	constexpr float LineHeight = 40.f;
@@ -812,7 +818,10 @@ void AArenaHUD::DrawGameOver()
 		}
 	} });
 	MenuButtons.Add({ TEXT("World map"), FBox2D(), [this]() { UArenaSession::Get(this)->Travel(this, EArenaScene::WorldMap); } });
-	MenuButtons.Add({ TEXT("Leaderboard"), FBox2D(), [this]() { ShowScreen(EScreen::Leaderboard); } });
+	if (bArcadeScores)
+	{
+		MenuButtons.Add({ TEXT("Leaderboard"), FBox2D(), [this]() { ShowScreen(EScreen::Leaderboard); } });
+	}
 	MenuButtons.Add({ TEXT("Credits"), FBox2D(), [this]() { CreditsReturnTo = EScreen::GameOver; ShowScreen(EScreen::Credits); } });
 	MenuButtons.Add({ TEXT("Quit"), FBox2D(), [this]() { UKismetSystemLibrary::QuitGame(this, PlayerOwner, EQuitPreference::Quit, false); } });
 
@@ -1170,6 +1179,10 @@ void AArenaHUD::TickWorldMap()
 	{
 		TravelToMapNode(MapSelection);
 	}
+	if (MapSelection == 0 && PlayerOwner->WasInputKeyJustPressed(EKeys::B))
+	{
+		OpenShop();
+	}
 }
 
 void AArenaHUD::DrawWorldMap()
@@ -1261,7 +1274,16 @@ void AArenaHUD::DrawWorldMap()
 		}
 	}
 
-	// Nikki stands on the selected stop.
+	// The shopkeeper waits beside the home town, under a SHOP sign.
+	if (UTexture2D* Keeper = StoryTexture(TEXT("NPC_Merchant")))
+	{
+		const FVector2D Home = NodeAt(0);
+		const float W = Keeper->GetSizeX() * 3.f, KeeperH = Keeper->GetSizeY() * 3.f;
+		DrawTexture(Keeper, Home.X + 40.f, Home.Y - KeeperH + 20.f, W, KeeperH, 0.f, 0.f, 1.f, 1.f, FLinearColor::White, BLEND_Translucent);
+		DrawShadowed(TEXT("SHOP"), Home.X + 40.f + W * 0.5f, Home.Y - KeeperH - 6.f, MapSelection == 0 ? WaveYellow : FLinearColor::White, 1.1f);
+	}
+
+	// The hero stands on the selected stop.
 	const AArenaPlayerPawn* Hero = Cast<AArenaPlayerPawn>(GetOwningPawn());
 	const UPaperSprite* Portrait = Hero ? Hero->GetPortrait() : nullptr;
 	if (UTexture2D* Marker = Portrait ? Portrait->GetBakedTexture() : nullptr)
@@ -1291,9 +1313,15 @@ void AArenaHUD::DrawWorldMap()
 		{
 			DrawCentered(TEXT("(work in progress)"), Center, PanelY + 116.f, Parchment * 0.7f, 1.f, GetMenuFont());
 		}
-		DrawCentered(FString::Printf(TEXT("Gold  %s"), *FText::AsNumber(Session->Gold).ToString()), Center, PanelY + 164.f, WaveYellow, 1.3f, GetMenuFont());
-		DrawCentered(TEXT("W / S  choose"), Center, PanelY + 220.f, Parchment, 1.f, GetMenuFont());
-		DrawCentered(TEXT("Enter  travel"), Center, PanelY + 250.f, Parchment, 1.f, GetMenuFont());
+		DrawCentered(ArenaShop::Money(Session->Gold), Center, PanelY + 164.f, WaveYellow, 1.3f, GetMenuFont());
+		DrawCentered(TEXT("W / S  choose      Enter  travel"), Center, PanelY + 214.f, Parchment, 1.f, GetMenuFont());
+		if (MapSelection == 0)
+		{
+			// The shop lives at the home town: a button here, or B.
+			FMenuButton& ShopButton = MenuButtons.Add_GetRef({ TEXT("SHOP  (B)"),
+				FBox2D(FVector2D(PanelX + 60.f, PanelY + 240.f), FVector2D(PanelX + PanelW - 60.f, PanelY + 286.f)), [this]() { OpenShop(); } });
+			DrawButton(ShopButton, GetMouse());
+		}
 	}
 }
 
@@ -1313,8 +1341,8 @@ void AArenaHUD::DrawStageClear()
 	const float X = (Canvas->ClipX - Width) * 0.5f;
 	const float Y = (Canvas->ClipY - Height) * 0.5f;
 	DrawPanel(X, Y, Width, Height, TEXT("STAGE CLEAR!"));
-	DrawCentered(FString::Printf(TEXT("Score %s  becomes gold"), *FText::AsNumber(GameMode->GetScore()).ToString()), Canvas->ClipX * 0.5f, Y + 110.f, Parchment, 1.2f, GetMenuFont());
-	DrawCentered(FString::Printf(TEXT("Gold  %s"), *FText::AsNumber(Session->Gold).ToString()), Canvas->ClipX * 0.5f, Y + 152.f, WaveYellow, 1.5f, GetMenuFont());
+	DrawCentered(FString::Printf(TEXT("Score %s  pays  %s"), *FText::AsNumber(GameMode->GetScore()).ToString(), *ArenaShop::Money(GameMode->GetScore())), Canvas->ClipX * 0.5f, Y + 110.f, Parchment, 1.2f, GetMenuFont());
+	DrawCentered(FString::Printf(TEXT("Wallet  %s"), *ArenaShop::Money(Session->Gold)), Canvas->ClipX * 0.5f, Y + 152.f, WaveYellow, 1.5f, GetMenuFont());
 	DrawCentered(TEXT("The road ahead is open."), Canvas->ClipX * 0.5f, Y + 204.f, Parchment, 1.f, GetMenuFont());
 	DrawMenuButtons((Canvas->ClipX - 300.f) * 0.5f, Y + Height - 84.f, 300.f);
 }
@@ -1324,6 +1352,12 @@ void AArenaHUD::DrawStageClear()
 void AArenaHUD::OpenShop()
 {
 	ShowScreen(EScreen::Shop);
+}
+
+void AArenaHUD::CloseShop()
+{
+	const AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>();
+	ShowScreen(GameMode && GameMode->GetSceneKind() == EArenaScene::WorldMap ? EScreen::WorldMap : EScreen::Playing);
 }
 
 void AArenaHUD::DrawShop()
@@ -1339,26 +1373,37 @@ void AArenaHUD::DrawShop()
 	MenuButtons.Reset();
 	for (const FShopItem& Item : ArenaShop::Items())
 	{
+		if (!Item.Hero.IsEmpty() && Item.Hero != Hero->GetScriptName())
+		{
+			continue;
+		}
 		const int32 Owned = Session->Purchases.FindRef(Item.Id);
-		const FString Label = FString::Printf(TEXT("%s   -   %s   -   %s gold   (%d / %d)"),
-			*Item.Name, *Item.Description, *FText::AsNumber(Item.Cost).ToString(), Owned, Item.MaxCount);
+		const bool bWearing = Item.bOutfit && Session->Outfit == Item.Id;
+		const FString Status = bWearing ? TEXT("wearing") : Item.bOutfit && Owned ? TEXT("owned: click to wear") : FString::Printf(TEXT("%d / %d"), Owned, Item.MaxCount);
+		const FString Label = FString::Printf(TEXT("%s   -   %s   -   %s   (%s)"), *Item.Name, *Item.Description, *ArenaShop::Money(Item.Cost), *Status);
+		// An owned outfit can always be clicked to put it back on.
+		const bool bDisabled = !ArenaShop::CanBuy(*Session, Item) && !(Item.bOutfit && Owned && !bWearing);
 		MenuButtons.Add({ Label, FBox2D(), [this, Session, Hero, GameMode, &Item]()
 		{
-			if (!ArenaShop::TryBuy(*Session, Item))
+			const bool bBought = ArenaShop::TryBuy(*Session, Item);
+			if (!bBought && !(Item.bOutfit && Session->Owns(Item.Id)))
 			{
 				return;
 			}
+			if (Item.bOutfit)
+			{
+				Session->Outfit = Item.Id;
+			}
 			UArenaSession::PlaySfx(this, GameMode->GetStorySound(TEXT("Coin")));
 			Hero->RefreshStats();
-			// Some purchases are story moments: close the shop and let her speak.
-			if (!Item.BoughtSection.IsEmpty() && GameMode->GetScene())
+			// Some purchases are story moments; she says her piece next time she's home.
+			if (bBought && !Item.BoughtSection.IsEmpty())
 			{
-				ShowScreen(EScreen::Playing);
-				GameMode->GetScene()->Say(Item.BoughtSection);
+				Session->PendingSection = Item.BoughtSection;
 			}
-		}, nullptr, !ArenaShop::CanBuy(*Session, Item) });
+		}, nullptr, bDisabled });
 	}
-	MenuButtons.Add({ TEXT("Leave  (Esc)"), FBox2D(), [this]() { ShowScreen(EScreen::Playing); } });
+	MenuButtons.Add({ TEXT("Leave  (Esc)"), FBox2D(), [this]() { CloseShop(); } });
 
 	const float Width = FMath::Min(1000.f, Canvas->ClipX - 40.f);
 	const float Height = 190.f + MenuButtons.Num() * 70.f;
@@ -1367,7 +1412,7 @@ void AArenaHUD::DrawShop()
 	DrawPanel(X, Y, Width, Height, TEXT("SHOP"));
 
 	const FArenaStats& Stats = Hero->GetStats();
-	DrawCentered(FString::Printf(TEXT("Gold  %s"), *FText::AsNumber(Session->Gold).ToString()), Canvas->ClipX * 0.5f, Y + 96.f, WaveYellow, 1.4f, GetMenuFont());
+	DrawCentered(FString::Printf(TEXT("Wallet  %s"), *ArenaShop::Money(Session->Gold)), Canvas->ClipX * 0.5f, Y + 96.f, WaveYellow, 1.4f, GetMenuFont());
 	DrawCentered(FString::Printf(TEXT("HP %.0f    AD %.0f    AP %.0f    Armor %.0f    MR %.0f    MS %.0f"),
 		Stats.MaxHealth, Stats.AttackDamage, Stats.AbilityPower, Stats.Armor, Stats.MagicResist, Stats.MoveSpeed),
 		Canvas->ClipX * 0.5f, Y + 136.f, Parchment, 1.f, GetMenuFont());
@@ -1375,6 +1420,27 @@ void AArenaHUD::DrawShop()
 }
 
 // ---------------------------------------------------------------- debug
+
+void AArenaHUD::TickCheatCode()
+{
+	// Typing a hero's name during a stage ("nikki" or "carl") wipes it and counts it as cleared.
+	static const FKey Letters[] = { EKeys::N, EKeys::I, EKeys::K, EKeys::C, EKeys::A, EKeys::R, EKeys::L };
+	for (const FKey& Letter : Letters)
+	{
+		if (PlayerOwner->WasInputKeyJustPressed(Letter))
+		{
+			CheatTyped = (CheatTyped + Letter.ToString()).Right(5);
+		}
+	}
+	if (CheatTyped.EndsWith(TEXT("NIKKI")) || CheatTyped.EndsWith(TEXT("CARL")))
+	{
+		CheatTyped.Reset();
+		if (AArenaGameMode* GameMode = GetWorld()->GetAuthGameMode<AArenaGameMode>())
+		{
+			GameMode->BeatStage();
+		}
+	}
+}
 
 void AArenaHUD::TickDebug()
 {
@@ -1411,6 +1477,7 @@ void AArenaHUD::TickDebug()
 		// Everything open: all stages, the guitar, the contract.
 		Session->HighestUnlocked = GameMode->GetRoute().Num() - 1;
 		Session->Purchases.FindOrAdd(ArenaShop::Guitar) = 1;
+		Session->Purchases.FindOrAdd(ArenaShop::Volley) = 1;
 		Session->bContractSigned = Session->bIntroSeen = Session->bDressed = true;
 		if (Hero)
 		{

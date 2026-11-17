@@ -73,6 +73,9 @@ protected:
 	// Bounces an arrow over a prop to show where to go next; null hides it.
 	void PointAt(AStoryProp* Target);
 	void MoveHeroTo(const FVector2D& Where);
+	// Loads the current hero's script file (Content/Story/<Hero>.txt).
+	void LoadHeroScript();
+	bool IsHero(const TCHAR* Name) const;
 
 	AArenaPlayerPawn* GetHero() const;
 	UArenaSession& GetSession() const;

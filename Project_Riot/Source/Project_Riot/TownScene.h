@@ -4,8 +4,8 @@
 #include "StoryScene.h"
 #include "TownScene.generated.h"
 
-// Nikki's home village, Rock County: a walkable hub with no combat. Signs and villagers
-// tell the story, the elder's contract opens the road out, and the stall sells upgrades.
+// The hero's home town: a walkable hub with no combat. Signs and villagers tell the
+// story, and the elder's contract opens the road out. (The shop is on the world map.)
 UCLASS()
 class PROJECT_RIOT_API ATownScene : public AStoryScene
 {
@@ -21,7 +21,6 @@ private:
 	// A prop that plays one script section when used.
 	AStoryProp* AddTalker(FName ArtName, const FVector2D& Where, const FString& Prompt, const FString& Section, bool bBlocksMovement = true);
 	void SignContract();
-	void OpenShop();
 
 	UPROPERTY()
 	TObjectPtr<AStoryProp> Contract;

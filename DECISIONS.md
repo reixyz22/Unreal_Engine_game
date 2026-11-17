@@ -163,7 +163,7 @@ The calls I made on this project, newest at the bottom. Each entry gives what I 
 - Heroes and enemies share one stat block (`FArenaStats`): health, attack damage, ability power, armor, magic resist, move speed.
 - One damage rule: `damage x 100 / (100 + resistance)`. Physical damage checks armor, magic checks magic resist.
 - Autos scale with attack damage; Nikki's Q scales with ability power.
-- Score becomes gold when a run ends, and gold buys stat upgrades and specials at the village stall.
+- Score pays out as money when a run ends, a cent per point, so stage income stays small next to the contract. The shop on the world map sells stat upgrades, specials and outfits.
 
 **Cost.** Everything starts at 0 resistance, so today the numbers play exactly as before. The system is there to be tuned.
 

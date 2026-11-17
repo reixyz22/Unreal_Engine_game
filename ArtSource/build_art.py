@@ -28,7 +28,7 @@ WALL_BACKING = (28, 22, 30, 255)
 # Hardware cursors per hero: Kenney's white-with-black-outline tiles, tinted and scaled up.
 CURSOR_SCALE = 2
 GUITAR_PIXELS = 15
-HERO_CURSORS = {"Nikki": (255, 105, 190)}
+HERO_CURSORS = {"Nikki": (255, 105, 190), "Carl": (90, 150, 255)}
 CURSOR_TILES = {"Pointer": "tile_0048.png", "Sword": "tile_0106.png"}
 
 
