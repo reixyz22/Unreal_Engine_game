@@ -421,13 +421,15 @@ void AArenaPlayerPawn::ThrowChainAtProp(AStoryProp* Prop)
 
 	FVector SpawnAt = GetActorLocation();
 	SpawnAt.Y = ChainDepth;
-	FVector Spot = Prop->GetActorLocation();
+	FVector Spot = Prop->GetActorLocation() + FVector(Prop->MaceAim.X, 0.0, Prop->MaceAim.Y);
 	Spot.Y = ChainDepth;
+	if (Prop->OnMaceThrown)
+	{
+		Prop->OnMaceThrown();
+	}
 
 	if (AArenaChainBall* Ball = GetWorld()->SpawnActor<AArenaChainBall>(SpawnAt, FRotator::ZeroRotator))
 	{
-		// A hidden hero (still in bed) shows herself as she swings.
-		SetActorHiddenInGame(false);
 		TWeakObjectPtr<AStoryProp> Target = Prop;
 		Ball->ThrowAt(this, Spot, { ChainBallSprite, ChainLinkSprite, ChainHitSound }, ChainSpeed, [Target]()
 		{

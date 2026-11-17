@@ -27,6 +27,8 @@ public:
 	void Punch();
 	// Rattle side to side for a while (the buzzing phone).
 	void Wobble(float Seconds);
+	// Steps through Frames once and holds the last one.
+	void PlayFrames(const TArray<UPaperSprite*>& Frames, float SecondsPerFrame);
 
 	// What the HUD shows when the hero is close enough, e.g. "Read the sign".
 	FString Prompt;
@@ -38,12 +40,21 @@ public:
 	// Set to make this a mace target: hover shows the sword cursor, right-click throws at it,
 	// and this runs when the ball lands.
 	TFunction<void()> OnMaceHit;
+	// Runs as the mace is thrown at this prop.
+	TFunction<void()> OnMaceThrown;
+	// Where the ball lands, relative to the prop's center (usually right on it).
+	FVector2D MaceAim = FVector2D::ZeroVector;
 
 private:
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UPaperSpriteComponent> Sprite;
 
+	UPROPERTY()
+	TArray<TObjectPtr<UPaperSprite>> Frames;
+
 	FVector2D HalfSize = FVector2D::ZeroVector;
+	double FramesStartedAt = 0.0;
+	float FrameSeconds = 0.f;
 	double PunchUntil = 0.0;
 	double WobbleUntil = 0.0;
 };

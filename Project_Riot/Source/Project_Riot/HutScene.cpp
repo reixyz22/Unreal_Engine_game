@@ -13,6 +13,11 @@ namespace
 	const FVector2D ClosetSpot(200.0, 160.0);
 	const FVector2D DoorSpot(0.0, -248.0);
 	const FVector2D WakeSpot(-110.0, 50.0);
+	// Where she sits up in bed (the swing frames put her torso here); the chain starts from her.
+	const FVector2D InBedSpot(-200.0, 100.0);
+	// The ball flies out past the foot of the bed.
+	const FVector2D BedSwingAim(0.0, -140.0);
+	constexpr float BedSwingFrameSeconds = 0.06f;
 	const FVector2D EntrySpot(0.0, -140.0);
 	constexpr double ExitLine = -185.0;
 	constexpr double DoorHalfWidth = 50.0;
@@ -204,8 +209,22 @@ void AHutScene::SoundAlarm()
 			}
 			bLockInput = false;
 			bHoldStill = true;
+			MoveHeroTo(InBedSpot);
 			Objective = TEXT("Get out of bed.  Right-click it.");
 			PointAt(Bed);
+			// She swings from under the covers; the ball lands past the bed, not on it.
+			Bed->MaceAim = BedSwingAim;
+			Bed->OnMaceThrown = [this]()
+			{
+				Bed->OnMaceThrown = nullptr;
+				PointAt(nullptr);
+				TArray<UPaperSprite*> Swing;
+				for (int32 Index = 0; Index < 6; ++Index)
+				{
+					Swing.Add(Art(*FString::Printf(TEXT("Bed_Nikki_Swing_%d"), Index)));
+				}
+				Bed->PlayFrames(Swing, BedSwingFrameSeconds);
+			};
 			Bed->OnMaceHit = [this]() { SmashOutOfBed(); };
 		});
 	});
@@ -213,12 +232,17 @@ void AHutScene::SoundAlarm()
 
 void AHutScene::SmashOutOfBed()
 {
-	// She showed herself as she threw; the bed breaks when the ball lands.
+	// The ball lands and the bed gives way; she tumbles out beside it as the chain comes back.
 	Bed->OnMaceHit = nullptr;
 	Bed->SetArt(Art(TEXT("Bed_Broken")));
 	Bed->Punch();
 	Sfx(TEXT("Smash"));
 	Popup(TEXT("WHAM!"), *Bed);
+	MoveHeroTo(WakeSpot);
+	if (AArenaPlayerPawn* Hero = GetHero())
+	{
+		Hero->SetActorHiddenInGame(false);
+	}
 	bHoldStill = false;
 	Objective.Reset();
 	GetSession().bBedSmashed = true;

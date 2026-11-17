@@ -44,10 +44,34 @@ void AStoryProp::Wobble(float Seconds)
 	WobbleUntil = GetWorld()->GetTimeSeconds() + Seconds;
 }
 
+void AStoryProp::PlayFrames(const TArray<UPaperSprite*>& InFrames, float SecondsPerFrame)
+{
+	Frames.Reset();
+	for (UPaperSprite* Frame : InFrames)
+	{
+		Frames.Add(Frame);
+	}
+	FramesStartedAt = GetWorld()->GetTimeSeconds();
+	FrameSeconds = SecondsPerFrame;
+}
+
 void AStoryProp::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	const double Now = GetWorld()->GetTimeSeconds();
+
+	if (Frames.Num() > 0)
+	{
+		const int32 Index = FMath::Min(Frames.Num() - 1, FMath::FloorToInt32((Now - FramesStartedAt) / FrameSeconds));
+		if (Sprite->GetSprite() != Frames[Index])
+		{
+			Sprite->SetSprite(Frames[Index]);
+		}
+		if (Index == Frames.Num() - 1)
+		{
+			Frames.Reset();
+		}
+	}
 
 	// Depth sort: if the hero's feet are above this prop's base on screen, she is behind it.
 	FVector Location = GetActorLocation();

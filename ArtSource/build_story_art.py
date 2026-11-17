@@ -116,8 +116,9 @@ def bed(sleeper=False, broken=False):
     for y in range(16, 33, 5):
         draw.line((2, y, 21, y), fill=(170, 60, 116, 255))
     if sleeper:
-        head = Image.open(IMPORT / "Nikki_Idle_0.png").convert("RGBA").crop((0, 7, 16, 18))
-        image.alpha_composite(head, (4, 2))
+        # Her pyjama frame (nightcap and all), so the swing frames match.
+        head = Image.open(STORY / "Nikki_PJ_Idle_0.png").convert("RGBA").crop((0, 4, 16, 18))
+        image.alpha_composite(head, (4, 0))
         draw.rectangle((2, 13, 21, 15), fill=(214, 88, 150, 255))
     if broken:
         image, draw = new((30, 38))
@@ -130,9 +131,20 @@ def bed(sleeper=False, broken=False):
     return image
 
 
+def bed_swing(index):
+    """Nikki sitting up under the covers mid-swing: her pyjama strike frame, cut at the waist."""
+    image = bed()
+    torso = Image.open(STORY / f"Nikki_PJ_Strike_{index}.png").convert("RGBA").crop((0, 4, 16, 20))
+    image.alpha_composite(torso, (4, 0))
+    ImageDraw.Draw(image).rectangle((2, 16, 21, 18), fill=(214, 88, 150, 255))
+    return image
+
+
 def export_hut_props():
     save(bed(), "Bed")
     save(bed(sleeper=True), "Bed_Nikki")
+    for index in range(6):
+        save(bed_swing(index), f"Bed_Nikki_Swing_{index}")
     save(bed(broken=True), "Bed_Broken")
 
     stand, draw = new((14, 14))
