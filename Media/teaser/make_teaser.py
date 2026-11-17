@@ -37,10 +37,14 @@ LAUNCH = VIDEOS / "nasa_launch" / "artemis1_launch_small.mp4"
 
 # Crops of the editor window: the whole game viewport, or tighter on the hut room
 # (room, phone and dialog box) so the cutscene reads at gif size.
-VIEWPORT = "1526:870:4:135"
+# Every crop is 16:9, so each shot fills the whole gif with no bars.
+VIEWPORT = "1526:858:4:141"
+# Room, phone and dialog box together, for the moments the UI is the point.
 ROOM = "1100:620:210:380"
-# Tighter still, for Carl's small "[E] Text your crush" prompt.
+# Tighter, for Carl's small "[E] Text your crush" prompt.
 ROOM_CLOSE = "720:405:480:400"
+# Zoomed until the room touches the gif's edges; found per frame, since the hut camera moves.
+ROOM_FILL = "room"
 # Carl and the top wall, so the bouncing arrow is big enough to follow.
 BOUNCE = "1100:620:300:135"
 
@@ -65,22 +69,20 @@ def montage(*clips):
 
 
 SHOTS = [
-    card("COMING SOON", 1.0),
     clip(TAKE_A, "0:01.0", "0:03.0", "Nikki asleep, phone buzzes", ROOM),
     clip(TAKE_A, "0:04.0", "0:08.0", "Carl's text types out", ROOM, speed=2.0),
     clip(TAKE_A, "0:09.0", "0:11.5", "'Ugh. Not this guy again.' BLOCKED", ROOM),
     clip(TAKE_A, "0:12.0", "0:14.8", "BEEP BEEP BEEP, 'I guess I have to get ready.'", ROOM),
-    clip(TAKE_A, "0:16.0", "0:17.6", "Mace out of bed, WHAM, 'Okay. I'm up.'", ROOM),
-    clip(TAKE_B, "0:16.6", "0:17.8", "Closet, POOF", ROOM),
+    clip(TAKE_A, "0:16.0", "0:17.6", "Mace out of bed, WHAM", ROOM_FILL),
+    clip(TAKE_B, "0:16.6", "0:17.8", "Closet, POOF", ROOM_FILL),
     card("TWO ADVENTURERS"),
     card("GO ON AN ANNOYING JOURNEY"),
     card("TO PAY THE BILLS"),
     clip(TAKE_B, "0:56.6", "0:58.0", "Carl: [E] Text your crush", ROOM_CLOSE),
-    clip(TAKE_B, "1:06.5", "1:08.5", "The dog wakes Carl", ROOM),
-    clip(TAKE_B, "0:49.0", "0:51.0", "Nikki's chain on the white stage"),
-    clip(TAKE_A, "1:11.5", "1:14.0", "Map: Nikki walks to Space"),
+    clip(TAKE_B, "1:06.5", "1:08.5", "The dog wakes Carl", ROOM_FILL),
+    clip(TAKE_A, "1:12.0", "1:14.3", "Map: Nikki walks to Space"),
     clip(LAUNCH, "0:56.0", "0:56.5", "A real rocket launch", crop=None),
-    clip(TAKE_B, "1:51.5", "1:53.5", "Space combat (Carl)"),
+    clip(TAKE_B, "0:49.0", "0:51.0", "Nikki fighting in Space"),
     clip(TAKE_B, "0:29.5", "0:31.0", "The shop"),
     clip(TAKE_A, "0:54.0", "0:55.5", "Buying Lucky Charms"),
     clip(TAKE_B, "1:42.5", "1:45.0", "Carl hovers ???"),
@@ -146,15 +148,52 @@ def render_missing(shot, out):
     encode_frames(frames, out)
 
 
+def room_box(frame):
+    """The hut room's walls in a 1920 x 1080 editor frame: (left, top, right, bottom).
+
+    Counts bright pixels per column and per row. Only the room fills a whole column or row;
+    pop-up text, the hero, and the dialog box's border lines are too short to pass.
+    """
+    gray = frame.convert("L").point(lambda v: 1 if v > 60 else 0)
+    width, height = gray.size
+    pixels = gray.load()
+    columns = [sum(pixels[x, y] for y in range(200, 1000)) for x in range(width)]
+    rows = [sum(pixels[x, y] for x in range(width)) for y in range(200, 800)]
+    filled = [x for x, count in enumerate(columns) if count > 200]
+    left, right = filled[0], filled[-1]
+    top = 200 + next(y for y, count in enumerate(rows) if count > 300)
+    return left, top, right, top + (right - left) * 4 // 5
+
+
+def render_room_fill(shot, out):
+    """Zooms each frame until the room touches the gif's edges.
+
+    Done per frame because the hut camera snaps to follow the hero mid-shot.
+    """
+    folder = WORK / f"{out.stem}_src"
+    folder.mkdir(parents=True)
+    run("-ss", shot["start"], "-t", shot["seconds"], "-i", shot["source"], "-vf", f"fps={FPS}", folder / "%04d.png")
+    frames = []
+    for path in sorted(folder.glob("*.png")):
+        frame = Image.open(path).convert("RGB")
+        left, top, right, bottom = room_box(frame)
+        crop_height = (right - left) * 9 // 16
+        # The room is taller than 16:9: keep the top (bed, nightstand, closet), lose the door.
+        y = top + max(0, (bottom - top - crop_height) // 4)
+        frames.append(frame.crop((left, y, right, y + crop_height)).resize((W, H), Image.LANCZOS))
+    encode_frames(frames, out)
+
+
 def render_clip(shot, out):
     if not shot["source"].exists():
         render_missing(shot, out)
         return
-    # Letterboxed, like a trailer: the game fills the middle band.
+    if shot["crop"] == ROOM_FILL:
+        render_room_fill(shot, out)
+        return
     crop = f"crop={shot['crop']}," if shot["crop"] else ""
-    band = H - 2 * 24
     speed = f"setpts=PTS/{shot['speed']}," if shot["speed"] != 1.0 else ""
-    filters = f"{speed}{crop}scale={W}:{band}:force_original_aspect_ratio=decrease,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,fps={FPS}"
+    filters = f"{speed}{crop}scale={W}:{H},fps={FPS}"
     run("-ss", shot["start"], "-t", shot["seconds"], "-i", shot["source"], "-vf", filters,
         "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", out)
 
