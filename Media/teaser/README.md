@@ -11,4 +11,7 @@ python Media/teaser/make_teaser.py
 ## Wanted shots
 
 - Nikki fighting in Space. Carl stands in for now.
-- A ricochet arrow (key 1) bouncing off a wall.
+
+## Credits
+
+The rocket launch is NASA footage ("Artemis I Launch (Press Site)", images.nasa.gov, 2022), public domain. The script expects it at `Videos/nasa_launch/artemis1_launch_small.mp4`.

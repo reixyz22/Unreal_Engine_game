@@ -32,6 +32,8 @@ FONT = "C:/Windows/Fonts/consolab.ttf"
 # with its dialog, the shop purchase and the map to Space. B: second take, everything else.
 TAKE_A = VIDEOS / "2026-11-17 14-59-17.mp4"
 TAKE_B = VIDEOS / "2026-11-17 15-09-02.mp4"
+# Public domain: NASA, "Artemis I Launch (Press Site)", images.nasa.gov, 2022.
+LAUNCH = VIDEOS / "nasa_launch" / "artemis1_launch_small.mp4"
 
 # Crops of the editor window: the whole game viewport, or tighter on the hut room
 # (room, phone and dialog box) so the cutscene reads at gif size.
@@ -39,6 +41,8 @@ VIEWPORT = "1526:870:4:135"
 ROOM = "1100:620:210:380"
 # Tighter still, for Carl's small "[E] Text your crush" prompt.
 ROOM_CLOSE = "720:405:480:400"
+# Carl and the top wall, so the bouncing arrow is big enough to follow.
+BOUNCE = "1100:620:300:135"
 
 
 def at(stamp):
@@ -75,6 +79,7 @@ SHOTS = [
     clip(TAKE_B, "1:06.5", "1:08.5", "The dog wakes Carl", ROOM),
     clip(TAKE_B, "0:49.0", "0:51.0", "Nikki's chain on the white stage"),
     clip(TAKE_A, "1:11.5", "1:14.0", "Map: Nikki walks to Space"),
+    clip(LAUNCH, "0:56.0", "0:56.5", "A real rocket launch", crop=None),
     clip(TAKE_B, "1:51.5", "1:53.5", "Space combat (Carl)"),
     clip(TAKE_B, "0:29.5", "0:31.0", "The shop"),
     clip(TAKE_A, "0:54.0", "0:55.5", "Buying Lucky Charms"),
@@ -82,10 +87,10 @@ SHOTS = [
     montage(
         clip(TAKE_B, "1:58.6", "1:59.4", "Two arrow kills in a row"),
         clip(TAKE_B, "2:04.4", "2:05.2", "Shots into a group by the wall"),
-        clip(TAKE_B, "2:26.1", "2:27.0", "Arrow kill by the wall"),
+        clip(TAKE_B, "2:39.9", "2:41.5", "Arrow off the top wall into the pack", BOUNCE),
         clip(TAKE_B, "2:42.0", "2:42.8", "Crowded wave in Space"),
     ),
-    card("PROJECT RIOT", 1.0),
+    card("NEW GAME COMING SOON", 1.4),
 ]
 
 
