@@ -2,9 +2,9 @@
 
     python Media/teaser/make_teaser.py
 
-Edit SHOTS below: each clip names a recording, a start time and a length. A clip whose
-recording is missing becomes a grey "SHOT NEEDED" card, so the teaser always builds and
-doubles as an animatic. Needs ffmpeg and Pillow.
+Edit SHOTS below: each clip names a recording and its start and end time. A clip whose
+recording is missing becomes a grey "SHOT NEEDED" card, so the teaser still builds.
+Needs ffmpeg and Pillow.
 
 Rule for this file: no plot past the first stage. The captions tease the setup only.
 """
@@ -21,58 +21,71 @@ ROOT = HERE.parent.parent
 VIDEOS = Path.home() / "Videos"
 WORK = HERE / "_work"          # scratch frames and segments; gitignored
 OUT_GIF = ROOT / "Media" / "teaser.gif"
-OUT_MP4 = HERE / "_work" / "teaser.mp4"
+OUT_MP4 = ROOT / "Media" / "teaser.mp4"
 
 W, H, FPS = 640, 360, 12
 YELLOW = (255, 214, 64)
 WHITE = (240, 240, 240)
 FONT = "C:/Windows/Fonts/consolab.ttf"
-PORTRAITS = ROOT / "ArtSource" / "Import" / "Story"
 
-# The take William records (see README in this folder for the shot list).
-TAKE = VIDEOS / "teaser_take.mp4"
+# OBS recordings of the editor (1920 x 1080). A: first take, used for Nikki's cutscene
+# with its dialog, the shop purchase and the map to Space. B: second take, everything else.
+TAKE_A = VIDEOS / "2026-11-17 14-59-17.mp4"
+TAKE_B = VIDEOS / "2026-11-17 15-09-02.mp4"
+
+# Crops of the editor window: the whole game viewport, or tighter on the hut room
+# (room, phone and dialog box) so the cutscene reads at gif size.
+VIEWPORT = "1526:870:4:135"
+ROOM = "1100:620:210:380"
+# Tighter still, for Carl's small "[E] Text your crush" prompt.
+ROOM_CLOSE = "720:405:480:400"
 
 
-def clip(source, start, seconds, note, crop=None):
-    return {"kind": "clip", "source": Path(source), "start": start, "seconds": seconds, "note": note, "crop": crop}
+def at(stamp):
+    """'1:32.5' -> 92.5 seconds."""
+    minutes, seconds = stamp.split(":")
+    return int(minutes) * 60 + float(seconds)
 
 
-def card(text, seconds=1.8):
+def clip(source, start, end, note, crop=VIEWPORT, speed=1.0):
+    return {"kind": "clip", "source": Path(source), "start": at(start), "seconds": at(end) - at(start),
+            "note": note, "crop": crop, "speed": speed}
+
+
+def card(text, seconds=1.1):
     return {"kind": "card", "text": text, "seconds": seconds}
-
-
-def textbox(speaker, text, portrait, seconds=2.6):
-    return {"kind": "textbox", "speaker": speaker, "text": text, "portrait": portrait, "seconds": seconds}
 
 
 def montage(*clips):
     return {"kind": "montage", "clips": clips}
 
 
-# Times are placeholders until the take exists; set them from the recording.
 SHOTS = [
-    clip(TAKE, 0.0, 2.6, "Nikki asleep. Phone buzzes, Carl's text slides up"),
-    clip(TAKE, 0.0, 1.4, "BLOCKED stamp"),
-    clip(TAKE, 0.0, 1.6, "Alarm: BEEP BEEP BEEP, 'Ugh. I guess I have to get ready.'"),
-    clip(TAKE, 0.0, 1.4, "Right-click the bed: mace flies, WHAM"),
-    clip(TAKE, 0.0, 1.2, "Closet: pyjamas to work clothes, POOF"),
-    card("TWO YOUNG ADVENTURERS"),
-    clip(TAKE, 0.0, 2.0, "Carl: 'Text your crush'"),
-    clip(TAKE, 0.0, 1.4, "Carl is blocked, back to bed"),
-    clip(TAKE, 0.0, 1.4, "The dog wakes him"),
-    card("FORCED ON AN ANNOYING JOURNEY"),
-    textbox("Sarah", "The job pays $5600.", "NPC_Sarah"),
+    card("COMING SOON", 1.0),
+    clip(TAKE_A, "0:01.0", "0:03.0", "Nikki asleep, phone buzzes", ROOM),
+    clip(TAKE_A, "0:04.0", "0:08.0", "Carl's text types out", ROOM, speed=2.0),
+    clip(TAKE_A, "0:09.0", "0:11.5", "'Ugh. Not this guy again.' BLOCKED", ROOM),
+    clip(TAKE_A, "0:12.0", "0:14.8", "BEEP BEEP BEEP, 'I guess I have to get ready.'", ROOM),
+    clip(TAKE_A, "0:16.0", "0:17.6", "Mace out of bed, WHAM, 'Okay. I'm up.'", ROOM),
+    clip(TAKE_B, "0:16.6", "0:17.8", "Closet, POOF", ROOM),
+    card("TWO ADVENTURERS"),
+    card("GO ON AN ANNOYING JOURNEY"),
     card("TO PAY THE BILLS"),
+    clip(TAKE_B, "0:56.6", "0:58.0", "Carl: [E] Text your crush", ROOM_CLOSE),
+    clip(TAKE_B, "1:06.5", "1:08.5", "The dog wakes Carl", ROOM),
+    clip(TAKE_B, "0:49.0", "0:51.0", "Nikki's chain on the white stage"),
+    clip(TAKE_A, "1:11.5", "1:14.0", "Map: Nikki walks to Space"),
+    clip(TAKE_B, "1:51.5", "1:53.5", "Space combat (Carl)"),
+    clip(TAKE_B, "0:29.5", "0:31.0", "The shop"),
+    clip(TAKE_A, "0:54.0", "0:55.5", "Buying Lucky Charms"),
+    clip(TAKE_B, "1:42.5", "1:45.0", "Carl hovers ???"),
     montage(
-        clip(TAKE, 0.0, 0.5, "Stage: Nikki's chain mid-wave"),
-        clip(TAKE, 0.0, 0.5, "Carl's ricochet arrows"),
-        clip(TAKE, 0.0, 0.5, "World map, walking to a stop"),
-        clip(TAKE, 0.0, 0.5, "A different theme's stage"),
-        clip(TAKE, 0.0, 0.5, "The shop on the map"),
-        clip(TAKE, 0.0, 0.5, "Carl's volley"),
-        clip(TAKE, 0.0, 0.6, "Nikki's guitar strum"),
+        clip(TAKE_B, "1:58.6", "1:59.4", "Two arrow kills in a row"),
+        clip(TAKE_B, "2:04.4", "2:05.2", "Shots into a group by the wall"),
+        clip(TAKE_B, "2:26.1", "2:27.0", "Arrow kill by the wall"),
+        clip(TAKE_B, "2:42.0", "2:42.8", "Crowded wave in Space"),
     ),
-    card("PROJECT RIOT", 2.6),
+    card("PROJECT RIOT", 1.0),
 ]
 
 
@@ -117,30 +130,6 @@ def render_card(shot, out):
     encode_frames(frames, out)
 
 
-def render_textbox(shot, out):
-    # A dialog box on its own, like the game's, with the line typing on.
-    frames, total = [], round(shot["seconds"] * FPS)
-    portrait = None
-    path = PORTRAITS / f"{shot['portrait']}.png"
-    if path.exists():
-        portrait = Image.open(path).convert("RGBA")
-        scale = 96 // max(portrait.size)
-        portrait = portrait.resize((portrait.width * scale, portrait.height * scale), Image.NEAREST)
-    for i in range(total):
-        frame = Image.new("RGB", (W, H), (8, 6, 12))
-        draw = ImageDraw.Draw(frame)
-        box = (40, 200, W - 40, 330)
-        draw.rectangle(box, fill=(20, 16, 28), outline=YELLOW, width=3)
-        left = box[0] + 16
-        if portrait:
-            frame.paste(portrait, (left, box[1] + (box[3] - box[1] - portrait.height) // 2), portrait)
-            left += portrait.width + 16
-        draw.text((left, box[1] + 14), shot["speaker"].upper(), font=font(20), fill=YELLOW)
-        draw.text((left, box[1] + 48), shot["text"][: i * 2], font=font(26), fill=WHITE)
-        frames.append(frame)
-    encode_frames(frames, out)
-
-
 def render_missing(shot, out):
     frames = []
     for _ in range(round(shot["seconds"] * FPS)):
@@ -159,7 +148,8 @@ def render_clip(shot, out):
     # Letterboxed, like a trailer: the game fills the middle band.
     crop = f"crop={shot['crop']}," if shot["crop"] else ""
     band = H - 2 * 24
-    filters = f"{crop}scale={W}:{band}:force_original_aspect_ratio=decrease:flags=neighbor,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,fps={FPS}"
+    speed = f"setpts=PTS/{shot['speed']}," if shot["speed"] != 1.0 else ""
+    filters = f"{speed}{crop}scale={W}:{band}:force_original_aspect_ratio=decrease,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,fps={FPS}"
     run("-ss", shot["start"], "-t", shot["seconds"], "-i", shot["source"], "-vf", filters,
         "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", out)
 
@@ -185,8 +175,6 @@ def main():
     for shot in SHOTS:
         if shot["kind"] == "card":
             render_card(shot, next_out())
-        elif shot["kind"] == "textbox":
-            render_textbox(shot, next_out())
         elif shot["kind"] == "clip":
             render_clip(shot, next_out())
         elif shot["kind"] == "montage":
